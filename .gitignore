@@ -1,0 +1,15 @@
+# Swift / SwiftPM 빌드 산출물
+.build/
+.swiftpm/
+Package.resolved
+
+# 조립된 앱 번들 (소스로 빌드하므로 커밋하지 않음)
+Fika.app/
+*.app/
+
+# 배포 패키지
+*.zip
+*.dmg
+
+# macOS
+.DS_Store
