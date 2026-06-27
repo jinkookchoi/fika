@@ -81,9 +81,23 @@ final class BreakEngine: ObservableObject {
 
     var timeString: String { Self.mmss(remaining) }
 
+    /// 메뉴바용 고정폭 시간 문자열 (분을 2자리로 패딩해 글자 수를 일정하게 유지).
+    var menuTimeString: String { Self.mmss(remaining, padMinutes: true) }
+
     /// 남은 시간 비율 0~1 (진행 링용)
     var progress: Double {
         phaseDuration <= 0 ? 0 : min(1, max(0, remaining / phaseDuration))
+    }
+
+    /// 커피 잔 채움 정도 0(빔)~1(가득).
+    /// 작업 중엔 남은 비율만큼 차 있다 점점 줄고(마심), 휴식 중엔 거꾸로 차오른다(리필).
+    var coffeeLevel: Double {
+        let activePhase = (phase == .paused) ? phaseBeforePause : phase
+        switch activePhase {
+        case .breaking:  return 1 - progress   // 휴식하며 다시 채움
+        case .breakHold: return 1              // 가득 채운 채 복귀 대기
+        default:         return progress        // 작업하며 줄어듦 (자리비움 시 동결)
+        }
     }
 
     /// 단계별 색 (진행 링·강조용)
@@ -119,9 +133,9 @@ final class BreakEngine: ObservableObject {
         }
     }
 
-    static func mmss(_ t: TimeInterval) -> String {
+    static func mmss(_ t: TimeInterval, padMinutes: Bool = false) -> String {
         let s = max(0, Int(t.rounded()))
-        return String(format: "%d:%02d", s / 60, s % 60)
+        return String(format: padMinutes ? "%02d:%02d" : "%d:%02d", s / 60, s % 60)
     }
 
     // MARK: - 틱

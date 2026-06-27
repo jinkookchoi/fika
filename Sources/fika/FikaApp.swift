@@ -8,6 +8,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private let popover = NSPopover()
     private var titleTimer: Timer?
+    /// 김 애니메이션 위상 (커피 테마용)
+    private var steamPhase: Double = 0
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Log.rotateIfNeeded()
@@ -22,6 +24,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let button = statusItem.button {
             button.action = #selector(togglePopover(_:))
             button.target = self
+            // 고정폭 숫자 폰트 → 카운트다운 시 폭이 출렁이지 않음.
+            let size = button.font?.pointSize ?? NSFont.systemFontSize
+            button.font = .monospacedDigitSystemFont(ofSize: size, weight: .regular)
         }
         updateButton()
 
@@ -35,23 +40,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panelHost.sizingOptions = []
         popover.contentViewController = panelHost
 
-        // 메뉴바 제목 매초 갱신
-        titleTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+        // 메뉴바 갱신 (커피 김이 부드럽게 흔들리도록 짧은 주기로 다시 그린다)
+        titleTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.updateButton() }
         }
     }
 
     private func updateButton() {
         guard let button = statusItem?.button else { return }
+        steamPhase += 0.6
         let showTime = engine.settings.showMenuBarTime
         switch engine.settings.iconTheme {
+        case .coffee:
+            button.image = CoffeeIcon.image(
+                level: engine.coffeeLevel,
+                steamPhase: steamPhase,
+                away: engine.isAway,
+                paused: engine.phase == .paused,
+                warning: engine.isWarning ? engine.warningIntensity : 0)
+            button.imagePosition = showTime ? .imageLeading : .imageOnly
+            button.title = showTime ? " \(engine.menuTimeString)" : ""
         case .emoji:
             button.image = nil
-            button.title = showTime ? "\(engine.iconEmoji) \(engine.timeString)" : engine.iconEmoji
+            button.title = showTime ? "\(engine.iconEmoji) \(engine.menuTimeString)" : engine.iconEmoji
         case .symbol:
             button.image = NSImage(systemSymbolName: engine.iconSymbol, accessibilityDescription: engine.phaseLabel)
             button.imagePosition = showTime ? .imageLeading : .imageOnly
-            button.title = showTime ? " \(engine.timeString)" : ""
+            button.title = showTime ? " \(engine.menuTimeString)" : ""
         }
     }
 

@@ -3,12 +3,14 @@ import Combine
 
 /// 메뉴바 아이콘 테마.
 enum IconTheme: String, CaseIterable, Identifiable {
+    case coffee   // 커피 잔 애니메이션 (작업하면 줄고 휴식하면 채워짐)
     case emoji    // 컬러 이모지 (귀여움)
     case symbol   // SF 심볼 (단색·미니멀, 다크/라이트 자동 적응)
 
     var id: String { rawValue }
     var label: String {
         switch self {
+        case .coffee: return "커피 잔 (애니메이션)"
         case .emoji:  return "이모지 (컬러)"
         case .symbol: return "기호 (단색·미니멀)"
         }
@@ -71,8 +73,8 @@ final class AppSettings: ObservableObject {
         warningSeconds        = dbl("warningSeconds", 60)
         snoozeMinutes         = dbl("snoozeMinutes", 5)
         breakStyle            = BreakStyle(rawValue: d.string(forKey: "breakStyle") ?? "") ?? .fullscreen
-        iconTheme             = IconTheme(rawValue: d.string(forKey: "iconTheme") ?? "") ?? .emoji
-        showMenuBarTime       = bool("showMenuBarTime", false)
+        iconTheme             = IconTheme(rawValue: d.string(forKey: "iconTheme") ?? "") ?? .coffee
+        showMenuBarTime       = bool("showMenuBarTime", true)
         soundEnabled          = bool("soundEnabled", true)
         idleResetEnabled      = bool("idleResetEnabled", true)
         holdBreakUntilReturn  = bool("holdBreakUntilReturn", true)
@@ -92,8 +94,8 @@ final class AppSettings: ObservableObject {
         warningSeconds = 60
         snoozeMinutes = 5
         breakStyle = .fullscreen
-        iconTheme = .emoji
-        showMenuBarTime = false
+        iconTheme = .coffee
+        showMenuBarTime = true
         soundEnabled = true
         idleResetEnabled = true
         holdBreakUntilReturn = true
