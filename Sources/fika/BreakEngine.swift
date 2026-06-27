@@ -112,7 +112,7 @@ final class BreakEngine: ObservableObject {
     var phaseColor: Color {
         if isAway { return .gray }
         switch phase {
-        case .working:   return isWarning ? .orange : .green
+        case .working:   return isWarning ? .orange : Color(red: 0.83, green: 0.59, blue: 0.22)  // 앰버/카라멜
         case .breaking:  return isLongBreak ? .indigo : .teal
         case .breakHold: return .mint
         case .paused:    return .gray
