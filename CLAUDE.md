@@ -16,6 +16,7 @@
 ```bash
 ./build.sh              # swift build (release) → Fika.app 조립 + ad-hoc 서명
 swift build -c debug    # 컴파일만 빠르게 검증할 때
+./package.sh            # 빌드 + 친구 공유용 Fika-<버전>.zip 생성
 open Fika.app           # 실행 (메뉴바 전용, Dock 아이콘 없음)
 pkill -f MacOS/Fika     # 종료
 ```
@@ -34,7 +35,9 @@ pkill -f MacOS/Fika     # 종료
 | `Panel.swift` | 메뉴바 팝오버 통합 UI(탭바·상태/시간/알림/설정 탭·진행 링·버튼 스타일) |
 | `Idle.swift` | IOKit `IOHIDSystem`/`HIDIdleTime`으로 유휴 시간 측정(모든 HID 입력) |
 | `OverlayController/Views/Windows.swift` | 휴식 오버레이·예고 배너·시작 토스트 윈도우 |
-| `CoffeeIcon.swift` | 메뉴바 커피잔 아이콘을 코드로 그림(작업=줄고/휴식=차오름 + 김 애니메이션) |
+| `CoffeeAnimation.swift` | **메뉴바 커피 마스코트** — Veo 영상에서 뽑은 프레임 시퀀스 재생(상태별 work/warning/done). `Resources/coffee/<상태>/frame_NNN.png` |
+| `MascotCut.swift` | 화면 UI(휴식·예고·복귀·토스트·진행 링)용 마스코트 정지 컷. `Resources/cuts/<상태>.png` |
+| `CoffeeIcon.swift` | 절차적 커피잔(코드 드로잉). 지금은 메뉴바 폴백용(영상 프레임 없을 때만) |
 | `Log.swift` | 파일 로거(`~/Library/Logs/Fika/`) + 미처리 예외 핸들러 |
 | `LoginItem.swift` | `SMAppService`로 로그인 자동 실행 |
 | `Sound.swift` | 전환 사운드 |
@@ -49,6 +52,8 @@ pkill -f MacOS/Fika     # 종료
 - 앱은 `.accessory`(Dock 미표시). `Info.plist`에 `LSUIElement=true`.
 - **macOS 26+ 크래시 함정: SwiftUI를 borderless 창/팝오버에 얹을 땐 `sizingOptions = []` 필수.** `NSHostingView`/`NSHostingController`가 콘텐츠 크기에 맞춰 창 제약을 자동 갱신하는데, macOS 26의 강화된 Auto Layout 검증이 이 갱신을 레이아웃 패스 중 재진입으로 감지하면 `NSException`("…more Update Constraints in Window passes than there are views…")을 던져 앱을 죽인다(`EXC_BREAKPOINT`/`SIGTRAP`, 특히 sleep/wake 후 디스플레이 재계산 시). 우리 오버레이·팝오버는 전부 프레임/`contentSize`를 직접 지정하므로 자동 사이징이 불필요 → `OverlayController.setHosted()`와 팝오버 호스팅에서 `sizingOptions = []` 적용. **새 오버레이 창을 추가하면 반드시 `setHosted(_:_:)`를 거칠 것.** (이건 우리만의 버그가 아니라 macOS 26 회귀 — 같은 OS의 다른 SwiftUI 앱들도 동일 크래시)
 - **크래시·이상 동작 추적**: 설정 "문제 해결" → 디버그 로그를 켜면 상태 전환·sleep/wake·오버레이 동작이 `~/Library/Logs/Fika/Fika.log`에 쌓인다. sleep/wake·앱 시작·미처리 예외는 디버그 꺼도 항상 기록.
+- **마스코트 리소스 파이프라인**: 메뉴바·화면 마스코트는 **Veo 영상 → 그린스크린 키잉(`chromakey`+`despill`) → `magick -trim` → 프레임/컷**으로 만든다. 컵 색·음료 종류를 바꾸려면 **영상을 새로 생성해야** 한다(코드 hue 변환은 눈·커피색까지 변해 부자연). 색 버전당 번들도 그만큼 커진다.
+- **메뉴바(18px)에 통합 위젯은 하지 말 것.** 말풍선·진행바·색 숫자 등을 커피와 한 묶음으로 합치는 시도는 다 실패했다 — **영상 마스코트(완성 일러스트)와 코드로 그린 UI는 그림체가 충돌**하고, 18px에선 디테일이 뭉갠다. 메뉴바는 **마스코트 + 옆 숫자**로 단순하게 두고, 통합·풍부함은 큰 화면(패널 진행 링 등)에서 푼다.
 
 ## 컨벤션
 
