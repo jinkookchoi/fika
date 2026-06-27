@@ -33,7 +33,9 @@ pkill -f MacOS/Fika     # 종료
 | `Settings.swift` | 설정 모델 **`AppSettings`** (UserDefaults 자동 저장) + enum들 |
 | `Panel.swift` | 메뉴바 팝오버 통합 UI(탭바·상태/시간/알림/설정 탭·진행 링·버튼 스타일) |
 | `Idle.swift` | IOKit `IOHIDSystem`/`HIDIdleTime`으로 유휴 시간 측정(모든 HID 입력) |
-| `OverlayController/Views/Windows.swift` | 휴식 오버레이·예고 배너 윈도우 |
+| `OverlayController/Views/Windows.swift` | 휴식 오버레이·예고 배너·시작 토스트 윈도우 |
+| `CoffeeIcon.swift` | 메뉴바 커피잔 아이콘을 코드로 그림(작업=줄고/휴식=차오름 + 김 애니메이션) |
+| `Log.swift` | 파일 로거(`~/Library/Logs/Fika/`) + 미처리 예외 핸들러 |
 | `LoginItem.swift` | `SMAppService`로 로그인 자동 실행 |
 | `Sound.swift` | 전환 사운드 |
 
@@ -45,6 +47,8 @@ pkill -f MacOS/Fika     # 종료
 - **ad-hoc 서명**(`codesign --sign -`)이라 배포 시 Gatekeeper 경고가 난다. 친구에게 줄 땐 소스 빌드 권장(README "친구에게 공유" 참고). 경고 제거는 Developer ID 공증 필요.
 - **유휴 감지**는 입력 "내용"이 아니라 마지막 입력 후 경과 시간만 읽어 권한이 필요 없다.
 - 앱은 `.accessory`(Dock 미표시). `Info.plist`에 `LSUIElement=true`.
+- **macOS 26+ 크래시 함정: SwiftUI를 borderless 창/팝오버에 얹을 땐 `sizingOptions = []` 필수.** `NSHostingView`/`NSHostingController`가 콘텐츠 크기에 맞춰 창 제약을 자동 갱신하는데, macOS 26의 강화된 Auto Layout 검증이 이 갱신을 레이아웃 패스 중 재진입으로 감지하면 `NSException`("…more Update Constraints in Window passes than there are views…")을 던져 앱을 죽인다(`EXC_BREAKPOINT`/`SIGTRAP`, 특히 sleep/wake 후 디스플레이 재계산 시). 우리 오버레이·팝오버는 전부 프레임/`contentSize`를 직접 지정하므로 자동 사이징이 불필요 → `OverlayController.setHosted()`와 팝오버 호스팅에서 `sizingOptions = []` 적용. **새 오버레이 창을 추가하면 반드시 `setHosted(_:_:)`를 거칠 것.** (이건 우리만의 버그가 아니라 macOS 26 회귀 — 같은 OS의 다른 SwiftUI 앱들도 동일 크래시)
+- **크래시·이상 동작 추적**: 설정 "문제 해결" → 디버그 로그를 켜면 상태 전환·sleep/wake·오버레이 동작이 `~/Library/Logs/Fika/Fika.log`에 쌓인다. sleep/wake·앱 시작·미처리 예외는 디버그 꺼도 항상 기록.
 
 ## 컨벤션
 
