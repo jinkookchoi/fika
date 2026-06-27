@@ -116,10 +116,11 @@ struct PanelView: View {
 
             ScrollView {
                 content
-                    .padding(16)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(height: 380)
+            .frame(height: 470)
         }
         .frame(width: 380)
     }
@@ -261,7 +262,7 @@ private struct AlertsTab: View {
     @ObservedObject var settings: AppSettings
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
             sectionHeader("메뉴바 아이콘")
             Picker("", selection: $settings.iconTheme) {
                 ForEach(IconTheme.allCases) { Text($0.label).tag($0) }
@@ -270,11 +271,9 @@ private struct AlertsTab: View {
 
             Toggle("메뉴바에 남은 시간 표시", isOn: $settings.showMenuBarTime)
                 .font(.callout)
-            Text("끄면 아이콘만 표시돼 폭이 좁아집니다 (노치/좁은 메뉴바에서 유리).")
-                .font(.caption).foregroundStyle(.secondary)
 
             // 현재 테마의 단계별 아이콘 미리보기
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), alignment: .leading), count: 3), spacing: 8) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), alignment: .leading), count: 3), spacing: 6) {
                 ForEach(iconLegend, id: \.label) { item in
                     HStack(spacing: 6) {
                         Group {
@@ -289,10 +288,10 @@ private struct AlertsTab: View {
                     }
                 }
             }
-            .padding(8)
+            .padding(6)
             .background(RoundedRectangle(cornerRadius: 8).fill(.primary.opacity(0.05)))
 
-            Divider().padding(.vertical, 2)
+            Divider()
             sectionHeader("휴식 알림 방식")
             Picker("", selection: $settings.breakStyle) {
                 ForEach(BreakStyle.allCases) { Text($0.label).tag($0) }
@@ -300,7 +299,7 @@ private struct AlertsTab: View {
             .pickerStyle(.radioGroup).labelsHidden()
             Text(settings.breakStyle.detail).font(.caption).foregroundStyle(.secondary)
 
-            Divider().padding(.vertical, 2)
+            Divider()
             Toggle("전환 사운드 재생", isOn: $settings.soundEnabled)
             Button {
                 Sound.play(.breakEnd, enabled: true)
@@ -321,34 +320,23 @@ private struct SettingsTab: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
             sectionHeader("자리 비움 감지")
             Toggle("자리 비우면 작업 타이머 리셋", isOn: $settings.idleResetEnabled)
             if settings.idleResetEnabled {
                 stepperRow("자리 비움 인정 시간(분)", $settings.idleThresholdMinutes, 1...30, 1)
-                Text("키보드·마우스·트랙패드·조이스틱 입력이 이 시간 이상 없으면 휴식으로 보고, 돌아오면 작업 시간을 처음부터 다시 셉니다.")
-                    .font(.caption).foregroundStyle(.secondary)
             }
-
-            Divider().padding(.vertical, 2)
             Toggle("휴식이 끝나도 돌아올 때까지 작업 시작 안 함", isOn: $settings.holdBreakUntilReturn)
-            Text("휴식 시간이 다 돼도 자동으로 작업을 시작하지 않고, 돌아와서 입력하거나 ‘작업 시작’을 누를 때까지 기다립니다. 자리를 비운 동안 작업 시간이 헛돌지 않습니다.")
-                .font(.caption).foregroundStyle(.secondary)
 
-            Divider().padding(.vertical, 2)
+            Divider()
             Toggle("로그인 시 자동 실행", isOn: $settings.launchAtLogin)
-
-            Divider().padding(.vertical, 2)
-            sectionHeader("문제 해결")
             Toggle("디버그 로그 기록", isOn: $settings.debugMode)
-            Text("크래시·상태 전환 등 상세 로그를 ~/Library/Logs/Fika 에 남깁니다.")
-                .font(.caption).foregroundStyle(.secondary)
             Button { NSWorkspace.shared.open(Log.directory) } label: {
                 Label("로그 폴더 열기", systemImage: "folder")
             }
             .buttonStyle(PanelButtonStyle())
 
-            Divider().padding(.vertical, 2)
+            Divider()
             VStack(spacing: 8) {
                 Button { settings.resetToDefaults() } label: {
                     Label("기본값으로 초기화", systemImage: "arrow.counterclockwise")
@@ -364,7 +352,6 @@ private struct SettingsTab: View {
                 Spacer()
                 Text("v\(appVersion)").font(.callout).foregroundStyle(.secondary)
             }
-            .padding(.top, 2)
         }
     }
 }
