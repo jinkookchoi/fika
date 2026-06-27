@@ -31,9 +31,7 @@ final class OverlayController {
                 let w = makeWindow(frame: screen.frame,
                                    level: .screenSaver,
                                    passThrough: false)
-                w.contentView = NSHostingView(
-                    rootView: BreakView(engine: engine, fullscreen: true, showCard: isMain)
-                )
+                setHosted(w, BreakView(engine: engine, fullscreen: true, showCard: isMain))
                 w.makeKeyAndOrderFront(nil)
                 breakWindows.append(w)
             }
@@ -45,7 +43,7 @@ final class OverlayController {
                 let glow = makeWindow(frame: screen.frame,
                                       level: .floating,
                                       passThrough: true)
-                glow.contentView = NSHostingView(rootView: VignetteView(engine: engine))
+                setHosted(glow, VignetteView(engine: engine))
                 glow.orderFront(nil)
                 breakWindows.append(glow)
             }
@@ -57,9 +55,7 @@ final class OverlayController {
                                   y: f.maxY - cardH - 24,
                                   width: cardW, height: cardH)
                 let card = makeWindow(frame: rect, level: .floating, passThrough: false)
-                card.contentView = NSHostingView(
-                    rootView: BreakView(engine: engine, fullscreen: false, showCard: true)
-                )
+                setHosted(card, BreakView(engine: engine, fullscreen: false, showCard: true))
                 card.makeKeyAndOrderFront(nil)
                 breakWindows.append(card)
             }
@@ -82,7 +78,7 @@ final class OverlayController {
         let f = screen.visibleFrame
         let rect = NSRect(x: f.midX - w / 2, y: f.maxY - h - 16, width: w, height: h)
         let win = makeWindow(frame: rect, level: .statusBar, passThrough: false)
-        win.contentView = NSHostingView(rootView: WarningView(engine: engine))
+        setHosted(win, WarningView(engine: engine))
         win.orderFront(nil)
         warningWindow = win
     }
@@ -93,6 +89,18 @@ final class OverlayController {
     }
 
     // MARK: -
+
+    /// SwiftUI 뷰를 borderless 창의 contentView 로 얹는다.
+    /// `sizingOptions = []` 로 NSHostingView 가 창의 콘텐츠 크기 제약을 자동 갱신하지
+    /// 않게 막는다. (그 자동 갱신이 레이아웃 패스 중 재진입 예외를 일으켜 크래시했음 —
+    /// 특히 sleep/wake 후 디스플레이 재계산 시. 오버레이는 고정 크기/전체화면이라 자동
+    /// 사이징이 애초에 필요 없다.)
+    private func setHosted<V: View>(_ window: NSWindow, _ view: V) {
+        let host = NSHostingView(rootView: view)
+        host.sizingOptions = []
+        host.autoresizingMask = [.width, .height]
+        window.contentView = host
+    }
 
     private func makeWindow(frame: NSRect, level: NSWindow.Level, passThrough: Bool) -> NSWindow {
         let w = KeyableWindow(contentRect: frame,

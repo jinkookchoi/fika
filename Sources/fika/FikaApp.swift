@@ -24,7 +24,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 팝오버 = 통합 패널
         popover.behavior = .transient
         popover.contentSize = NSSize(width: 380, height: 460)
-        popover.contentViewController = NSHostingController(rootView: PanelView(engine: engine))
+        // sizingOptions=[] : 콘텐츠 크기 기반 자동 제약 갱신을 끈다. (오버레이와 동일 이유 —
+        // macOS 26 강화된 Auto Layout 검증이 레이아웃 재진입을 크래시로 처리. 팝오버는
+        // contentSize 로 크기를 고정하므로 자동 사이징이 필요 없다.)
+        let panelHost = NSHostingController(rootView: PanelView(engine: engine))
+        panelHost.sizingOptions = []
+        popover.contentViewController = panelHost
 
         // 메뉴바 제목 매초 갱신
         titleTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
