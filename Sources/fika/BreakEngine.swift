@@ -81,6 +81,14 @@ final class BreakEngine: ObservableObject {
 
     var timeString: String { Self.mmss(remaining) }
 
+    /// 현재 상태에 맞는 마스코트 컷 이름 (cuts/<name>.png).
+    var mascotCut: String {
+        if phase == .breakHold { return "done" }
+        if phase == .breaking { return "resting" }
+        if phase == .working && isWarning { return "warning" }
+        return "work"
+    }
+
     /// 메뉴바용 고정폭 시간 문자열 (분을 2자리로 패딩해 글자 수를 일정하게 유지).
     var menuTimeString: String { Self.mmss(remaining, padMinutes: true) }
 

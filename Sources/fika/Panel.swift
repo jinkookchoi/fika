@@ -147,15 +147,19 @@ private struct RingView: View {
                         style: StrokeStyle(lineWidth: 12, lineCap: .round))
                 .rotationEffect(.degrees(-90))
                 .animation(.easeInOut(duration: 0.4), value: engine.progress)
-            VStack(spacing: 2) {
+            VStack(spacing: 4) {
+                if let cut = MascotCut.image(engine.mascotCut) {
+                    cut.resizable().interpolation(.high).scaledToFit()
+                        .frame(width: 46, height: 46)
+                }
                 Text(engine.timeString)
-                    .font(.system(size: 36, weight: .bold, design: .rounded))
+                    .font(.system(size: 30, weight: .bold, design: .rounded))
                     .monospacedDigit()
                 Text(engine.phaseLabel)
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
-        .frame(width: 150, height: 150)
+        .frame(width: 164, height: 164)
     }
 }
 

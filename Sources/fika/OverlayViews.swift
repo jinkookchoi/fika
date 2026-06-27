@@ -20,11 +20,17 @@ struct BreakView: View {
     }
 
     private var isHold: Bool { engine.phase == .breakHold }
+    private var cutName: String { isHold ? "done" : "resting" }
 
     private var card: some View {
         VStack(spacing: fullscreen ? 18 : 10) {
-            Text(isHold ? "✅" : (engine.isLongBreak ? "🌙" : "☕️"))
-                .font(.system(size: fullscreen ? 64 : 34))
+            if let cut = MascotCut.image(cutName) {
+                cut.resizable().interpolation(.high).scaledToFit()
+                    .frame(width: fullscreen ? 132 : 60, height: fullscreen ? 132 : 60)
+            } else {
+                Text(isHold ? "✅" : (engine.isLongBreak ? "🌙" : "☕️"))
+                    .font(.system(size: fullscreen ? 64 : 34))
+            }
             Text(isHold ? "다 쉬었어요!" : (engine.isLongBreak ? "긴 휴식 시간이에요" : "잠깐 쉬어 가요"))
                 .font(fullscreen ? .largeTitle.bold() : .headline)
             Text(isHold
@@ -66,7 +72,11 @@ struct StartToastView: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Text("🌱").font(.title2)
+            if let cut = MascotCut.image("work") {
+                cut.resizable().interpolation(.high).scaledToFit().frame(width: 34, height: 34)
+            } else {
+                Text("🌱").font(.title2)
+            }
             VStack(alignment: .leading, spacing: 1) {
                 Text("작업 시작").font(.headline)
                 Text("\(Int(engine.settings.workMinutes))분 집중해요")
@@ -120,9 +130,13 @@ struct WarningView: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: "hourglass")
-                .font(.title2)
-                .symbolEffect(.pulse, options: .repeating)
+            if let cut = MascotCut.image("warning") {
+                cut.resizable().interpolation(.high).scaledToFit().frame(width: 44, height: 44)
+            } else {
+                Image(systemName: "hourglass")
+                    .font(.title2)
+                    .symbolEffect(.pulse, options: .repeating)
+            }
             VStack(alignment: .leading, spacing: 2) {
                 Text("곧 휴식 시간이에요")
                     .font(.headline)
