@@ -54,6 +54,7 @@ final class AppSettings: ObservableObject {
     @Published var idleResetEnabled: Bool         { didSet { d.set(idleResetEnabled, forKey: "idleResetEnabled") } }
     @Published var idleThresholdMinutes: Double   { didSet { d.set(idleThresholdMinutes, forKey: "idleThresholdMinutes") } }
     @Published var launchAtLogin: Bool            { didSet { d.set(launchAtLogin, forKey: "launchAtLogin"); LoginItem.set(launchAtLogin) } }
+    @Published var debugMode: Bool                { didSet { d.set(debugMode, forKey: "debugMode"); Log.debugEnabled = debugMode } }
 
     init() {
         let store = UserDefaults.standard
@@ -75,6 +76,8 @@ final class AppSettings: ObservableObject {
         idleResetEnabled      = bool("idleResetEnabled", true)
         idleThresholdMinutes  = dbl("idleThresholdMinutes", 5)
         launchAtLogin         = bool("launchAtLogin", false)
+        debugMode             = bool("debugMode", false)
+        Log.debugEnabled = debugMode
     }
 
     /// 시간/알림 관련 값을 기본값으로 되돌린다. (자동 실행 상태는 건드리지 않음)

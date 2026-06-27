@@ -326,6 +326,16 @@ private struct SettingsTab: View {
             Toggle("로그인 시 자동 실행", isOn: $settings.launchAtLogin)
 
             Divider().padding(.vertical, 2)
+            sectionHeader("문제 해결")
+            Toggle("디버그 로그 기록", isOn: $settings.debugMode)
+            Text("크래시·상태 전환 등 상세 로그를 ~/Library/Logs/Fika 에 남깁니다.")
+                .font(.caption).foregroundStyle(.secondary)
+            Button { NSWorkspace.shared.open(Log.directory) } label: {
+                Label("로그 폴더 열기", systemImage: "folder")
+            }
+            .buttonStyle(PanelButtonStyle())
+
+            Divider().padding(.vertical, 2)
             VStack(spacing: 8) {
                 Button { settings.resetToDefaults() } label: {
                     Label("기본값으로 초기화", systemImage: "arrow.counterclockwise")

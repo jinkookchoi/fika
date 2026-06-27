@@ -10,6 +10,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var titleTimer: Timer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        Log.rotateIfNeeded()
+        Log.installCrashHandler()
+        Log.event("앱 시작 — debug=\(engine.settings.debugMode)")
+
         // Dock 아이콘 없이 메뉴바 전용으로 동작.
         NSApp.setActivationPolicy(.accessory)
 
