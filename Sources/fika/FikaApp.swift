@@ -40,8 +40,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panelHost.sizingOptions = []
         popover.contentViewController = panelHost
 
-        // 메뉴바 갱신 (커피 김이 부드럽게 흔들리도록 짧은 주기로 다시 그린다)
-        titleTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
+        // 메뉴바 갱신 (커피 애니메이션 프레임 재생 ~10fps)
+        titleTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.updateButton() }
         }
     }
@@ -52,12 +52,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let showTime = engine.settings.showMenuBarTime
         switch engine.settings.iconTheme {
         case .coffee:
-            button.image = CoffeeIcon.image(
-                level: engine.coffeeLevel,
-                steamPhase: steamPhase,
-                away: engine.isAway,
-                paused: engine.phase == .paused,
-                warning: engine.isWarning ? engine.warningIntensity : 0)
+            // 상태별 영상 마스코트 프레임 재생. (일시정지·자리비움이면 정지 프레임)
+            let clip: CoffeeAnimation.Clip =
+                engine.phase == .breakHold ? .done
+                : (engine.phase == .working && engine.isWarning) ? .warning
+                : .work
+            let frozen = engine.phase == .paused || engine.isAway
+            button.image = frozen ? CoffeeAnimation.still(clip) : CoffeeAnimation.next(clip)
             button.imagePosition = showTime ? .imageLeading : .imageOnly
             button.title = showTime ? " \(engine.menuTimeString)" : ""
         case .emoji:

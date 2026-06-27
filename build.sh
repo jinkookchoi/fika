@@ -18,6 +18,15 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BINPATH" "$APP/Contents/MacOS/Fika"
 cp Info.plist "$APP/Contents/Info.plist"
 
+# 메뉴바 커피 애니메이션 프레임(PNG 시퀀스)
+if [ -d Resources/coffee ]; then
+  cp -R Resources/coffee "$APP/Contents/Resources/coffee"
+fi
+# 화면 UI용 마스코트 정지 컷
+if [ -d Resources/cuts ]; then
+  cp -R Resources/cuts "$APP/Contents/Resources/cuts"
+fi
+
 # 로그인 항목 등록(SMAppService)을 위해 임시 ad-hoc 서명.
 codesign --force --deep --sign - "$APP" 2>/dev/null || true
 
