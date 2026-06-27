@@ -18,6 +18,11 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BINPATH" "$APP/Contents/MacOS/Fika"
 cp Info.plist "$APP/Contents/Info.plist"
 
+# 앱 아이콘 (Finder/Dock/로그인 항목 목록용)
+if [ -f Resources/AppIcon.icns ]; then
+  cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+fi
+
 # 메뉴바 커피 애니메이션 프레임(PNG 시퀀스)
 if [ -d Resources/coffee ]; then
   cp -R Resources/coffee "$APP/Contents/Resources/coffee"
