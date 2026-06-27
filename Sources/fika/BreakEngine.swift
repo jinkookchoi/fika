@@ -1,10 +1,20 @@
 import SwiftUI
 import AppKit
 
-enum Phase {
+enum Phase: CustomStringConvertible {
     case working    // 작업 중
     case breaking   // 휴식 중
+    case breakHold  // 휴식 시간은 끝났고, 사용자가 돌아오길 기다리는 중
     case paused     // 일시정지
+
+    var description: String {
+        switch self {
+        case .working:   return "working"
+        case .breaking:  return "breaking"
+        case .breakHold: return "breakHold"
+        case .paused:    return "paused"
+        }
+    }
 }
 
 /// 작업/휴식 사이클을 관리하는 두뇌.
@@ -28,10 +38,18 @@ final class BreakEngine: ObservableObject {
     private var pausedRemaining: TimeInterval = 0
     private var phaseBeforePause: Phase = .working
     private var timer: Timer?
+    /// 시스템 sleep 진입 시각 (wake 때 얼마나 잤는지 계산용)
+    private var sleepAt: Date?
     private lazy var overlay = OverlayController(engine: self)
 
     private init() {
         startWork()
+        startTimer()
+        observeSleepWake()
+    }
+
+    private func startTimer() {
+        timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.tick() }
         }
@@ -54,9 +72,10 @@ final class BreakEngine: ObservableObject {
     var phaseLabel: String {
         if isAway { return "자리 비움" }
         switch phase {
-        case .working:  return isWarning ? "곧 휴식" : "작업 중"
-        case .breaking: return isLongBreak ? "긴 휴식" : "휴식 중"
-        case .paused:   return "일시정지"
+        case .working:   return isWarning ? "곧 휴식" : "작업 중"
+        case .breaking:  return isLongBreak ? "긴 휴식" : "휴식 중"
+        case .breakHold: return "휴식 완료"
+        case .paused:    return "일시정지"
         }
     }
 
@@ -71,9 +90,10 @@ final class BreakEngine: ObservableObject {
     var phaseColor: Color {
         if isAway { return .gray }
         switch phase {
-        case .working:  return isWarning ? .orange : .green
-        case .breaking: return isLongBreak ? .indigo : .teal
-        case .paused:   return .gray
+        case .working:   return isWarning ? .orange : .green
+        case .breaking:  return isLongBreak ? .indigo : .teal
+        case .breakHold: return .mint
+        case .paused:    return .gray
         }
     }
 
@@ -81,9 +101,10 @@ final class BreakEngine: ObservableObject {
     var iconEmoji: String {
         if isAway { return "💤" }
         switch phase {
-        case .working:  return isWarning ? "⏳" : "🌱"
-        case .breaking: return isLongBreak ? "🌙" : "☕️"
-        case .paused:   return "⏸️"
+        case .working:   return isWarning ? "⏳" : "🌱"
+        case .breaking:  return isLongBreak ? "🌙" : "☕️"
+        case .breakHold: return "✅"
+        case .paused:    return "⏸️"
         }
     }
 
@@ -91,9 +112,10 @@ final class BreakEngine: ObservableObject {
     var iconSymbol: String {
         if isAway { return "moon.zzz.fill" }
         switch phase {
-        case .working:  return isWarning ? "hourglass" : "leaf.fill"
-        case .breaking: return isLongBreak ? "moon.stars.fill" : "cup.and.saucer.fill"
-        case .paused:   return "pause.fill"
+        case .working:   return isWarning ? "hourglass" : "leaf.fill"
+        case .breaking:  return isLongBreak ? "moon.stars.fill" : "cup.and.saucer.fill"
+        case .breakHold: return "checkmark.circle.fill"
+        case .paused:    return "pause.fill"
         }
     }
 
@@ -111,15 +133,30 @@ final class BreakEngine: ObservableObject {
         } else if isAway {
             isAway = false
         }
+        if phase == .breakHold {
+            handleBreakHold()
+            refreshPresentation()
+            return
+        }
         remaining = max(0, phaseEnd.timeIntervalSinceNow)
         if remaining <= 0 {
             switch phase {
             case .working:  enterBreak()
             case .breaking: endBreak()
-            case .paused:   break
+            case .breakHold, .paused: break
             }
         }
         refreshPresentation()
+    }
+
+    /// 휴식이 끝났지만 사용자가 아직 안 돌아온 상태.
+    /// 입력이 감지되면(유휴 시간이 짧아지면) 그제서야 작업을 시작한다.
+    /// → 자리를 비운 동안 작업 시간이 헛돌지 않는다.
+    private func handleBreakHold() {
+        if SystemIdle.seconds() < 2 {
+            Log.debug("복귀 감지 → 작업 시작 (breakHold 해제)")
+            startWorkFromBreak()
+        }
     }
 
     /// 자리 비움(유휴) 처리. 작업 중에만 동작한다.
@@ -133,16 +170,61 @@ final class BreakEngine: ObservableObject {
         let idle = SystemIdle.seconds()
         let threshold = settings.idleThresholdMinutes * 60
         if idle >= threshold {
+            if !isAway { Log.debug("자리 비움 감지 (유휴 \(Int(idle))s)") }
             isAway = true
             phaseEnd = phaseEnd.addingTimeInterval(1)  // 한 틱만큼 미뤄 남은 시간 유지
         } else if isAway {
             isAway = false
+            Log.debug("복귀 → 작업 리셋")
             startWork()                                // 휴식으로 인정 → 작업 리셋
         }
     }
 
+    // MARK: - Sleep / Wake
+
+    /// 노트북 닫힘(sleep)·복귀(wake)를 직접 받는다.
+    /// sleep 중에는 Timer가 멈춰 `handleIdle()`이 자리 비움을 인지하지 못하므로
+    /// 별도로 처리한다. (유휴 자리비움은 화면 켠 채만 커버)
+    private func observeSleepWake() {
+        let nc = NSWorkspace.shared.notificationCenter
+        nc.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in self?.handleWillSleep() }
+        }
+        nc.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in self?.handleDidWake() }
+        }
+    }
+
+    private func handleWillSleep() {
+        sleepAt = Date()
+        timer?.invalidate()  // wake 때 보정을 마친 뒤 직접 재시작한다
+        timer = nil
+        Log.event("시스템 sleep (phase=\(phase), 남은 \(Int(remaining))s)")
+    }
+
+    /// 복귀 시 잔 시간만큼 보정한다.
+    /// - 휴식 시간 이상 잤으면: 이미 충분히 쉰 셈 → 작업 사이클 리셋 (`idleResetEnabled` 한정)
+    /// - 그보다 짧으면: 잔 시간을 작업으로 치지 않고 남은 시간을 동결해 보존
+    ///   (보정이 없으면 wall-clock phaseEnd가 과거가 돼 깨자마자 휴식으로 떨어진다)
+    private func handleDidWake() {
+        defer { startTimer() }
+        guard let sleptFrom = sleepAt, phase != .paused else { return }
+        sleepAt = nil
+        let slept = Date().timeIntervalSince(sleptFrom)
+        if settings.idleResetEnabled && slept >= settings.breakMinutes * 60 {
+            isAway = false
+            startWork()
+            Log.event("시스템 wake — \(Int(slept))s 잠 → 작업 리셋")
+        } else {
+            phaseEnd = phaseEnd.addingTimeInterval(slept)
+            remaining = max(0, phaseEnd.timeIntervalSinceNow)
+            Log.event("시스템 wake — \(Int(slept))s 잠 → 남은 시간 보존 (phase=\(phase))")
+        }
+        refreshPresentation()
+    }
+
     private func refreshPresentation() {
-        if phase == .breaking {
+        if phase == .breaking || phase == .breakHold {
             overlay.showBreak(style: settings.breakStyle)
         } else {
             overlay.hideBreak()
@@ -160,6 +242,14 @@ final class BreakEngine: ObservableObject {
         phase = .working
         isLongBreak = false
         setRemaining(settings.workMinutes * 60)
+        Log.debug("작업 시작 \(Int(settings.workMinutes))분")
+    }
+
+    /// 휴식을 마치고 작업으로 돌아갈 때. 작업 시작 토스트를 잠깐 띄운다.
+    private func startWorkFromBreak() {
+        startWork()
+        refreshPresentation()      // 휴식 오버레이 내림
+        overlay.showStartToast()
     }
 
     private func enterBreak() {
@@ -171,12 +261,25 @@ final class BreakEngine: ObservableObject {
         setRemaining((isLongBreak ? settings.longBreakMinutes : settings.breakMinutes) * 60)
         Sound.play(.breakStart, enabled: settings.soundEnabled)
         refreshPresentation()
+        Log.debug("휴식 진입 \(isLongBreak ? "긴" : "짧은") (완료 세션 \(completedWork))")
     }
 
     private func endBreak() {
         Sound.play(.breakEnd, enabled: settings.soundEnabled)
-        startWork()
-        refreshPresentation()
+        if settings.holdBreakUntilReturn {
+            enterBreakHold()      // 돌아올 때까지 작업 시작을 미룬다
+            refreshPresentation()
+        } else {
+            startWorkFromBreak()
+        }
+    }
+
+    private func enterBreakHold() {
+        phase = .breakHold
+        isLongBreak = false
+        remaining = 0
+        phaseDuration = 1
+        Log.debug("휴식 종료 → 복귀 대기(breakHold)")
     }
 
     private func setRemaining(_ t: TimeInterval) {
@@ -216,11 +319,10 @@ final class BreakEngine: ObservableObject {
         enterBreak()
     }
 
-    /// 휴식 건너뛰고 다음 작업 시작.
+    /// 휴식 건너뛰고 다음 작업 시작. (복귀 대기 중이면 바로 작업 시작)
     func skipBreak() {
-        guard phase == .breaking else { return }
-        startWork()
-        refreshPresentation()
+        guard phase == .breaking || phase == .breakHold else { return }
+        startWorkFromBreak()
     }
 
     /// 5분(설정값) 연기.
@@ -235,7 +337,7 @@ final class BreakEngine: ObservableObject {
             phase = .working
             isLongBreak = false
             setRemaining(extra)
-        case .paused:
+        case .breakHold, .paused:
             break
         }
         refreshPresentation()

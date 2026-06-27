@@ -19,24 +19,35 @@ struct BreakView: View {
         .ignoresSafeArea()
     }
 
+    private var isHold: Bool { engine.phase == .breakHold }
+
     private var card: some View {
         VStack(spacing: fullscreen ? 18 : 10) {
-            Text(engine.isLongBreak ? "🌙" : "☕️")
+            Text(isHold ? "✅" : (engine.isLongBreak ? "🌙" : "☕️"))
                 .font(.system(size: fullscreen ? 64 : 34))
-            Text(engine.isLongBreak ? "긴 휴식 시간이에요" : "잠깐 쉬어 가요")
+            Text(isHold ? "다 쉬었어요!" : (engine.isLongBreak ? "긴 휴식 시간이에요" : "잠깐 쉬어 가요"))
                 .font(fullscreen ? .largeTitle.bold() : .headline)
-            Text("일어나서 몸을 펴고, 먼 곳을 바라보세요.")
+            Text(isHold
+                 ? "준비되면 시작하세요 — 키보드나 마우스를 움직이면 자동으로 시작됩니다."
+                 : "일어나서 몸을 펴고, 먼 곳을 바라보세요.")
                 .font(fullscreen ? .title3 : .caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
-            Text(BreakEngine.mmss(engine.remaining))
-                .font(.system(size: fullscreen ? 80 : 40, weight: .bold, design: .rounded))
-                .monospacedDigit()
-                .padding(.vertical, fullscreen ? 6 : 2)
+            if !isHold {
+                Text(BreakEngine.mmss(engine.remaining))
+                    .font(.system(size: fullscreen ? 80 : 40, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .padding(.vertical, fullscreen ? 6 : 2)
+            }
             HStack(spacing: 12) {
-                Button("\(Int(engine.settings.snoozeMinutes))분 연기") { engine.snooze() }
-                Button("건너뛰기") { engine.skipBreak() }
-                    .keyboardShortcut(.cancelAction)
+                if isHold {
+                    Button("작업 시작") { engine.skipBreak() }
+                        .keyboardShortcut(.defaultAction)
+                } else {
+                    Button("\(Int(engine.settings.snoozeMinutes))분 연기") { engine.snooze() }
+                    Button("건너뛰기") { engine.skipBreak() }
+                        .keyboardShortcut(.cancelAction)
+                }
             }
             .controlSize(fullscreen ? .large : .regular)
         }
@@ -45,6 +56,32 @@ struct BreakView: View {
         .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(.white.opacity(0.08)))
         .shadow(radius: 20)
         .padding(fullscreen ? 0 : 4)
+    }
+}
+
+/// 작업이 시작됐음을 잠깐 알리는 작은 캡슐 토스트. (클릭은 통과)
+struct StartToastView: View {
+    @ObservedObject var engine: BreakEngine
+    @State private var shown = false
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text("🌱").font(.title2)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("작업 시작").font(.headline)
+                Text("\(Int(engine.settings.workMinutes))분 집중해요")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 18).padding(.vertical, 10)
+        .background(.regularMaterial, in: Capsule())
+        .overlay(Capsule().strokeBorder(.green.opacity(0.45), lineWidth: 1.5))
+        .shadow(radius: 10)
+        .opacity(shown ? 1 : 0)
+        .scaleEffect(shown ? 1 : 0.85)
+        .onAppear {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) { shown = true }
+        }
     }
 }
 

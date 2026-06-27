@@ -52,6 +52,7 @@ final class AppSettings: ObservableObject {
     @Published var showMenuBarTime: Bool          { didSet { d.set(showMenuBarTime, forKey: "showMenuBarTime") } }
     @Published var soundEnabled: Bool             { didSet { d.set(soundEnabled, forKey: "soundEnabled") } }
     @Published var idleResetEnabled: Bool         { didSet { d.set(idleResetEnabled, forKey: "idleResetEnabled") } }
+    @Published var holdBreakUntilReturn: Bool     { didSet { d.set(holdBreakUntilReturn, forKey: "holdBreakUntilReturn") } }
     @Published var idleThresholdMinutes: Double   { didSet { d.set(idleThresholdMinutes, forKey: "idleThresholdMinutes") } }
     @Published var launchAtLogin: Bool            { didSet { d.set(launchAtLogin, forKey: "launchAtLogin"); LoginItem.set(launchAtLogin) } }
     @Published var debugMode: Bool                { didSet { d.set(debugMode, forKey: "debugMode"); Log.debugEnabled = debugMode } }
@@ -74,6 +75,7 @@ final class AppSettings: ObservableObject {
         showMenuBarTime       = bool("showMenuBarTime", false)
         soundEnabled          = bool("soundEnabled", true)
         idleResetEnabled      = bool("idleResetEnabled", true)
+        holdBreakUntilReturn  = bool("holdBreakUntilReturn", true)
         idleThresholdMinutes  = dbl("idleThresholdMinutes", 5)
         launchAtLogin         = bool("launchAtLogin", false)
         debugMode             = bool("debugMode", false)
@@ -94,6 +96,7 @@ final class AppSettings: ObservableObject {
         showMenuBarTime = false
         soundEnabled = true
         idleResetEnabled = true
+        holdBreakUntilReturn = true
         idleThresholdMinutes = 5
     }
 }

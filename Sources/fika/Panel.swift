@@ -183,6 +183,10 @@ private struct HomeTab: View {
                     Button { engine.snooze() } label: {
                         Label("\(Int(engine.settings.snoozeMinutes))분 연기", systemImage: "zzz")
                     }
+                } else if engine.phase == .breakHold {
+                    Button { engine.skipBreak() } label: {
+                        Label("작업 시작", systemImage: "play.fill")
+                    }
                 } else {
                     Button { engine.breakNow() } label: {
                         Label("지금 휴식하기", systemImage: "cup.and.saucer.fill")
@@ -321,6 +325,11 @@ private struct SettingsTab: View {
                 Text("키보드·마우스·트랙패드·조이스틱 입력이 이 시간 이상 없으면 휴식으로 보고, 돌아오면 작업 시간을 처음부터 다시 셉니다.")
                     .font(.caption).foregroundStyle(.secondary)
             }
+
+            Divider().padding(.vertical, 2)
+            Toggle("휴식이 끝나도 돌아올 때까지 작업 시작 안 함", isOn: $settings.holdBreakUntilReturn)
+            Text("휴식 시간이 다 돼도 자동으로 작업을 시작하지 않고, 돌아와서 입력하거나 ‘작업 시작’을 누를 때까지 기다립니다. 자리를 비운 동안 작업 시간이 헛돌지 않습니다.")
+                .font(.caption).foregroundStyle(.secondary)
 
             Divider().padding(.vertical, 2)
             Toggle("로그인 시 자동 실행", isOn: $settings.launchAtLogin)

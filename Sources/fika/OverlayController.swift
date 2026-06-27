@@ -9,6 +9,8 @@ final class OverlayController {
     private var breakWindows: [NSWindow] = []
     private var currentStyle: BreakStyle?
     private var warningWindow: NSWindow?
+    private var toastWindow: NSWindow?
+    private var toastTimer: Timer?
 
     init(engine: BreakEngine) {
         self.engine = engine
@@ -23,6 +25,7 @@ final class OverlayController {
 
         let screens = NSScreen.screens
         let mainScreen = NSScreen.main ?? screens.first
+        Log.debug("휴식 오버레이 표시 (style=\(style), 화면 \(screens.count)개)")
 
         switch style {
         case .fullscreen:
@@ -67,6 +70,7 @@ final class OverlayController {
         breakWindows.forEach { $0.orderOut(nil) }
         breakWindows.removeAll()
         currentStyle = nil
+        Log.debug("휴식 오버레이 숨김")
     }
 
     // MARK: - 예고 배너
@@ -86,6 +90,35 @@ final class OverlayController {
     func hideWarning() {
         warningWindow?.orderOut(nil)
         warningWindow = nil
+    }
+
+    // MARK: - 작업 시작 토스트 (잠깐 떴다 사라지는 알림)
+
+    func showStartToast() {
+        hideStartToast()
+        guard let screen = NSScreen.main else { return }
+        let w: CGFloat = 240, h: CGFloat = 60
+        let f = screen.visibleFrame
+        let rect = NSRect(x: f.midX - w / 2, y: f.maxY - h - 16, width: w, height: h)
+        let win = makeWindow(frame: rect, level: .statusBar, passThrough: true)
+        setHosted(win, StartToastView(engine: engine))
+        win.orderFront(nil)
+        toastWindow = win
+        Log.debug("작업 시작 토스트 표시")
+        toastTimer = Timer.scheduledTimer(withTimeInterval: 2.5, repeats: false) { [weak self] _ in
+            Task { @MainActor in self?.hideStartToast() }
+        }
+    }
+
+    func hideStartToast() {
+        toastTimer?.invalidate()
+        toastTimer = nil
+        guard let win = toastWindow else { return }
+        toastWindow = nil
+        NSAnimationContext.runAnimationGroup({ ctx in
+            ctx.duration = 0.3
+            win.animator().alphaValue = 0
+        }, completionHandler: { win.orderOut(nil) })
     }
 
     // MARK: -
