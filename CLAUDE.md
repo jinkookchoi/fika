@@ -32,13 +32,14 @@ pkill -f MacOS/Fika     # 종료
 | `FikaApp.swift` | 진입점 + `AppDelegate`. **`NSStatusItem`+`NSPopover`로 메뉴바 직접 생성** |
 | `BreakEngine.swift` | 작업/휴식 상태머신(두뇌). `@MainActor` 싱글톤 `.shared` |
 | `Settings.swift` | 설정 모델 **`AppSettings`** (UserDefaults 자동 저장) + enum들 |
-| `Panel.swift` | 메뉴바 팝오버 통합 UI(탭바·상태/시간/알림/설정 탭·진행 링·버튼 스타일) |
+| `Panel.swift` | 메뉴바 팝오버 통합 UI(탭바·상태/시간/알림/동작/분석/설정 6탭·진행 링·차트·버튼 스타일) |
 | `Idle.swift` | IOKit `IOHIDSystem`/`HIDIdleTime`으로 유휴 시간 측정(모든 HID 입력) |
 | `OverlayController/Views/Windows.swift` | 휴식 오버레이·예고 배너·시작 토스트 윈도우 |
 | `CoffeeAnimation.swift` | **메뉴바 커피 마스코트** — Veo 영상에서 뽑은 프레임 시퀀스 재생(상태별 work/warning/done). `Resources/coffee/<상태>/frame_NNN.png` |
 | `MascotCut.swift` | 화면 UI(휴식·예고·복귀·토스트·진행 링)용 마스코트 정지 컷. `Resources/cuts/<상태>.png` |
 | `CoffeeIcon.swift` | 절차적 커피잔(코드 드로잉). 지금은 메뉴바 폴백용(영상 프레임 없을 때만) |
 | `Log.swift` | 파일 로거(`~/Library/Logs/Fika/`) + 미처리 예외 핸들러 |
+| `Stats.swift` | **집중 분석** — 완료 세션 기록 저장(`~/Library/Application Support/Fika/sessions.json`) + 일/주/월 집계. `SessionStore.shared` |
 | `LoginItem.swift` | `SMAppService`로 로그인 자동 실행 |
 | `Sound.swift` | 전환 사운드 |
 
@@ -59,4 +60,7 @@ pkill -f MacOS/Fika     # 종료
 
 - 주석·UI 텍스트는 한국어.
 - 설정 변경은 저장 버튼 없이 즉시 적용(작업/휴식 "분"은 다음 단계부터 반영).
+- **데이터 저장**: 설정은 UserDefaults, 집중 세션 기록은 `~/Library/Application Support/Fika/sessions.json`(Codable JSON). 둘 다 앱 번들과 별개라 재설치/재빌드해도 유지된다.
+- **집중 세션은 "완료분"만 집계** — 작업→휴식 정상 전환(`enterBreak`) 시 1건 기록(`SessionStore.record`). 리셋·딴짓한 미완료 세션은 안 센다.
+- **작업 중 동작 알림(마이크로 브레이크)**: `microBreakEnabled`(기본 켬)면 작업 중 `microBreakMinutes`마다 동작 토스트. 곧 휴식 예고 구간엔 안 띄운다. 동작 문구는 `stretchTips`(설정에서 편집).
 - git 신원은 이 레포 로컬로 개인 계정(`Jinkook Choi <jinkookchoi@gmail.com>`) 설정됨(전역은 회사 계정).
