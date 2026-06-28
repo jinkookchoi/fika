@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import Charts
 
 // MARK: - 공통 스타일
 
@@ -54,17 +55,19 @@ private func stepperRow(_ title: String, _ value: Binding<Double>, _ range: Clos
 // MARK: - 탭
 
 enum PanelTab: CaseIterable {
-    case home, time, alerts, stretch, settings
+    case home, time, alerts, stretch, stats, settings
     var title: String {
         switch self {
         case .home: return "상태"; case .time: return "시간"
-        case .alerts: return "알림"; case .stretch: return "동작"; case .settings: return "설정"
+        case .alerts: return "알림"; case .stretch: return "동작"
+        case .stats: return "분석"; case .settings: return "설정"
         }
     }
     var icon: String {
         switch self {
         case .home: return "timer"; case .time: return "clock"
-        case .alerts: return "bell.badge"; case .stretch: return "figure.flexibility"; case .settings: return "gearshape"
+        case .alerts: return "bell.badge"; case .stretch: return "figure.flexibility"
+        case .stats: return "chart.bar.fill"; case .settings: return "gearshape"
         }
     }
 }
@@ -131,6 +134,7 @@ struct PanelView: View {
         case .time:     TimeTab(settings: engine.settings)
         case .alerts:   AlertsTab(settings: engine.settings)
         case .stretch:  StretchTab(settings: engine.settings)
+        case .stats:    StatsTab()
         case .settings: SettingsTab(settings: engine.settings)
         }
     }
@@ -356,6 +360,103 @@ private struct StretchTab: View {
                 Label("기본 문구로 되돌리기", systemImage: "arrow.counterclockwise")
             }
             .buttonStyle(PanelButtonStyle())
+        }
+    }
+}
+
+// MARK: - 분석 탭
+
+private struct StatsTab: View {
+    @ObservedObject private var stats = SessionStore.shared
+    @State private var period: Period = .daily
+    @State private var selected: Date?
+    private let amber = Color(red: 0.83, green: 0.59, blue: 0.22)
+
+    enum Period: String, CaseIterable, Identifiable {
+        case daily = "일별", weekly = "주별", monthly = "월별"
+        var id: String { rawValue }
+    }
+
+    private var series: [(date: Date, minutes: Double)] {
+        switch period {
+        case .daily:   return stats.dailySeries(days: 7)
+        case .weekly:  return stats.weeklySeries(weeks: 8)
+        case .monthly: return stats.monthlySeries(months: 6)
+        }
+    }
+    private var barUnit: Calendar.Component {
+        switch period { case .daily: return .day; case .weekly: return .weekOfYear; case .monthly: return .month }
+    }
+    private var total: Double { series.reduce(0) { $0 + $1.minutes } }
+
+    /// 선택된 x 위치에 가장 가까운 막대.
+    private var selectedItem: (date: Date, minutes: Double)? {
+        guard let selected else { return nil }
+        return series.min { abs($0.date.timeIntervalSince(selected)) < abs($1.date.timeIntervalSince(selected)) }
+    }
+
+    private func label(_ d: Date) -> String {
+        let f = DateFormatter()
+        switch period {
+        case .daily:   f.dateFormat = "EEEEE"   // 요일 1글자
+        case .weekly:  f.dateFormat = "M/d"
+        case .monthly: f.dateFormat = "M월"
+        }
+        return f.string(from: d)
+    }
+
+    private func detailLabel(_ d: Date) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "ko_KR")
+        switch period {
+        case .daily:   f.dateFormat = "M월 d일 (E)"
+        case .weekly:  f.dateFormat = "M/d 주"
+        case .monthly: f.dateFormat = "yyyy년 M월"
+        }
+        return f.string(from: d)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Picker("", selection: $period) {
+                ForEach(Period.allCases) { Text($0.rawValue).tag($0) }
+            }
+            .pickerStyle(.segmented).labelsHidden()
+            .onChange(of: period) { selected = nil }
+
+            // 막대를 탭하면 그 날(기간) 상세, 아니면 전체 합계
+            if let item = selectedItem {
+                Text("\(detailLabel(item.date)) · \(SessionStore.hm(item.minutes))")
+                    .font(.callout.weight(.semibold)).foregroundStyle(amber)
+            } else {
+                Text("\(period.rawValue) 합계 · \(SessionStore.hm(total))")
+                    .font(.callout.weight(.semibold)).foregroundStyle(amber)
+            }
+
+            Chart(series, id: \.date) { item in
+                BarMark(
+                    x: .value("기간", item.date, unit: barUnit),
+                    y: .value("집중(분)", item.minutes)
+                )
+                .foregroundStyle(selectedItem == nil || selectedItem!.date == item.date
+                                 ? amber : amber.opacity(0.35))
+                .cornerRadius(4)
+            }
+            .chartXSelection(value: $selected)
+            .chartXAxis {
+                AxisMarks(values: series.map { $0.date }) { value in
+                    if let d = value.as(Date.self) {
+                        AxisValueLabel { Text(label(d)) }
+                    }
+                }
+            }
+            .frame(height: 190)
+
+            Text(stats.records.isEmpty
+                 ? "작업을 한 세션 마치면 여기에 기록이 쌓여요."
+                 : "막대를 탭하면 그 날의 집중 시간을 볼 수 있어요.")
+                .font(.caption).foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .center)
         }
     }
 }

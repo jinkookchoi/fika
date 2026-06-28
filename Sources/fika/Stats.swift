@@ -51,6 +51,39 @@ final class SessionStore: ObservableObject {
         return sum(since: start)
     }
 
+    /// 최근 `days`일의 일별 집중 시간. (기록 없는 날도 0으로 포함, 과거→오늘 순)
+    func dailySeries(days: Int) -> [(date: Date, minutes: Double)] {
+        let today = cal.startOfDay(for: Date())
+        return (0..<days).reversed().map { offset in
+            let day = cal.date(byAdding: .day, value: -offset, to: today) ?? today
+            let mins = records.filter { cal.isDate($0.date, inSameDayAs: day) }
+                .reduce(0) { $0 + $1.minutes }
+            return (day, mins)
+        }
+    }
+
+    /// 최근 `weeks`주의 주별 집중 시간. (과거→이번 주 순)
+    func weeklySeries(weeks: Int) -> [(date: Date, minutes: Double)] {
+        let thisWeek = cal.dateInterval(of: .weekOfYear, for: Date())?.start ?? Date()
+        return (0..<weeks).reversed().map { offset in
+            let start = cal.date(byAdding: .weekOfYear, value: -offset, to: thisWeek) ?? thisWeek
+            let end = cal.date(byAdding: .weekOfYear, value: 1, to: start) ?? start
+            let mins = records.filter { $0.date >= start && $0.date < end }.reduce(0) { $0 + $1.minutes }
+            return (start, mins)
+        }
+    }
+
+    /// 최근 `months`개월의 월별 집중 시간. (과거→이번 달 순)
+    func monthlySeries(months: Int) -> [(date: Date, minutes: Double)] {
+        let thisMonth = cal.dateInterval(of: .month, for: Date())?.start ?? Date()
+        return (0..<months).reversed().map { offset in
+            let start = cal.date(byAdding: .month, value: -offset, to: thisMonth) ?? thisMonth
+            let end = cal.date(byAdding: .month, value: 1, to: start) ?? start
+            let mins = records.filter { $0.date >= start && $0.date < end }.reduce(0) { $0 + $1.minutes }
+            return (start, mins)
+        }
+    }
+
     /// "N시간 NN분" / "NN분" 형식.
     static func hm(_ minutes: Double) -> String {
         let m = Int(minutes.rounded())
