@@ -351,6 +351,16 @@ final class BreakEngine: ObservableObject {
         refreshPresentation()
     }
 
+    /// 작업 세션을 처음부터(설정한 작업 시간) 다시 시작한다. (집중 못 했을 때 수동 리셋)
+    func restartWork() {
+        guard phase == .working else { return }
+        isAway = false
+        setRemaining(settings.workMinutes * 60)
+        nextMicroBreak = Date().addingTimeInterval(settings.microBreakMinutes * 60)
+        refreshPresentation()
+        Log.debug("작업 다시 시작 (수동)")
+    }
+
     /// 지금 바로 휴식 시작 (작업 중일 때).
     func breakNow() {
         guard phase == .working else { return }

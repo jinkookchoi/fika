@@ -197,6 +197,11 @@ private struct HomeTab: View {
                     Button { engine.breakNow() } label: {
                         Label("지금 휴식하기", systemImage: "cup.and.saucer.fill")
                     }
+                    if engine.phase == .working {
+                        Button { engine.restartWork() } label: {
+                            Label("작업 다시 시작", systemImage: "arrow.clockwise")
+                        }
+                    }
                 }
             }
             .buttonStyle(PanelButtonStyle())
