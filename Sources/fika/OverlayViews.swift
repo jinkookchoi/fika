@@ -65,30 +65,47 @@ struct BreakView: View {
     }
 }
 
-/// 작업이 시작됐음을 잠깐 알리는 작은 캡슐 토스트. (클릭은 통과)
+/// 작업이 시작됐음을 알리는 토스트. 커피 친구가 격려한다. (닫기 버튼 + 초록 글로우)
 struct StartToastView: View {
     @ObservedObject var engine: BreakEngine
+    let onClose: () -> Void
     @State private var shown = false
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 11) {
             if let cut = MascotCut.image("work") {
                 cut.resizable().interpolation(.high).scaledToFit().frame(width: 34, height: 34)
             } else {
                 Text("🌱").font(.title2)
             }
-            VStack(alignment: .leading, spacing: 1) {
-                Text("작업 시작").font(.headline)
-                Text("\(Int(engine.settings.workMinutes))분 집중해요")
-                    .font(.caption).foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("이제 시작해볼까요?")
+                    .font(.caption).foregroundStyle(Color(red: 0.30, green: 0.50, blue: 0.30))
+                Text("\(Int(engine.settings.workMinutes))분, 열심히 해봐요")
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(Color(red: 0.18, green: 0.30, blue: 0.18))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(2)
             }
+            Spacer(minLength: 6)
+            Button(action: onClose) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 16))
+                    .foregroundStyle(Color(red: 0.30, green: 0.50, blue: 0.30).opacity(0.55))
+            }
+            .buttonStyle(.plain)
         }
-        .padding(.horizontal, 18).padding(.vertical, 10)
-        .background(.regularMaterial, in: Capsule())
-        .overlay(Capsule().strokeBorder(.green.opacity(0.45), lineWidth: 1.5))
-        .shadow(radius: 10)
+        .padding(.horizontal, 16).padding(.vertical, 12)
+        .frame(maxWidth: 440)
+        .background(Color(red: 0.93, green: 0.96, blue: 0.90),
+                    in: RoundedRectangle(cornerRadius: 20, style: .continuous))   // 연한 민트크림
+        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous)
+            .strokeBorder(Color(red: 0.42, green: 0.68, blue: 0.42), lineWidth: 1.5))   // 초록
+        .shadow(color: Color(red: 0.40, green: 0.80, blue: 0.40).opacity(0.6), radius: 18)  // 초록 아웃글로우
+        .shadow(color: .black.opacity(0.22), radius: 6, y: 2)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         .opacity(shown ? 1 : 0)
-        .scaleEffect(shown ? 1 : 0.85)
+        .scaleEffect(shown ? 1 : 0.9)
         .onAppear {
             withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) { shown = true }
         }

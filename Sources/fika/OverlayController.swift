@@ -97,15 +97,15 @@ final class OverlayController {
     func showStartToast() {
         hideStartToast()
         guard let screen = NSScreen.main else { return }
-        let w: CGFloat = 240, h: CGFloat = 60
+        let w: CGFloat = 520, h: CGFloat = 140   // 토스트 + 글로우 여백
         let f = screen.visibleFrame
         let rect = NSRect(x: f.midX - w / 2, y: f.maxY - h - 16, width: w, height: h)
-        let win = makeWindow(frame: rect, level: .statusBar, passThrough: true)
-        setHosted(win, StartToastView(engine: engine))
+        let win = makeWindow(frame: rect, level: .statusBar, passThrough: false)
+        setHosted(win, StartToastView(engine: engine, onClose: { [weak self] in self?.hideStartToast() }))
         win.orderFront(nil)
         toastWindow = win
         Log.debug("작업 시작 토스트 표시")
-        toastTimer = Timer.scheduledTimer(withTimeInterval: 2.5, repeats: false) { [weak self] _ in
+        toastTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: false) { [weak self] _ in
             Task { @MainActor in self?.hideStartToast() }
         }
     }
