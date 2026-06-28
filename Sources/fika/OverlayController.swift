@@ -121,6 +121,22 @@ final class OverlayController {
         }, completionHandler: { win.orderOut(nil) })
     }
 
+    /// 작업 중 마이크로 브레이크 동작 알림. (클릭 통과, 잠깐 떴다 사라짐)
+    func showStretchToast(_ text: String) {
+        hideStartToast()
+        guard let screen = NSScreen.main else { return }
+        let w: CGFloat = 520, h: CGFloat = 140   // 토스트(최대 440) + 글로우 여백
+        let f = screen.visibleFrame
+        let rect = NSRect(x: f.midX - w / 2, y: f.maxY - h - 16, width: w, height: h)
+        let win = makeWindow(frame: rect, level: .statusBar, passThrough: false)
+        setHosted(win, StretchToastView(text: text, onClose: { [weak self] in self?.hideStartToast() }))
+        win.orderFront(nil)
+        toastWindow = win
+        toastTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: false) { [weak self] _ in
+            Task { @MainActor in self?.hideStartToast() }
+        }
+    }
+
     // MARK: -
 
     /// SwiftUI 뷰를 borderless 창의 contentView 로 얹는다.

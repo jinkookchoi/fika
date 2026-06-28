@@ -40,6 +40,8 @@ final class BreakEngine: ObservableObject {
     private var timer: Timer?
     /// 시스템 sleep 진입 시각 (wake 때 얼마나 잤는지 계산용)
     private var sleepAt: Date?
+    /// 다음 마이크로 브레이크(작업 중 동작 알림) 예정 시각
+    private var nextMicroBreak: Date = .distantFuture
     private lazy var overlay = OverlayController(engine: self)
 
     private init() {
@@ -168,7 +170,21 @@ final class BreakEngine: ObservableObject {
             case .breakHold, .paused: break
             }
         }
+        handleMicroBreak()
         refreshPresentation()
+    }
+
+    /// 작업 중 주기적으로 동작 알림(마이크로 브레이크)을 띄운다.
+    /// 곧 휴식 예고 구간엔 띄우지 않는다 (곧 진짜 휴식이므로).
+    private func handleMicroBreak() {
+        guard settings.microBreakEnabled, phase == .working, !isAway, !isWarning else { return }
+        if Date() >= nextMicroBreak {
+            if let tip = settings.stretchTips.randomElement(), !tip.isEmpty {
+                overlay.showStretchToast(tip)
+                Log.debug("마이크로 브레이크: \(tip)")
+            }
+            nextMicroBreak = Date().addingTimeInterval(settings.microBreakMinutes * 60)
+        }
     }
 
     /// 휴식이 끝났지만 사용자가 아직 안 돌아온 상태.
@@ -264,6 +280,7 @@ final class BreakEngine: ObservableObject {
         phase = .working
         isLongBreak = false
         setRemaining(settings.workMinutes * 60)
+        nextMicroBreak = Date().addingTimeInterval(settings.microBreakMinutes * 60)
         Log.debug("작업 시작 \(Int(settings.workMinutes))분")
     }
 

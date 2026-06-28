@@ -95,6 +95,54 @@ struct StartToastView: View {
     }
 }
 
+/// 작업 중 마이크로 브레이크 동작 알림 토스트. (클릭 통과)
+/// 커피 마스코트 + 밝은 크림 배경 — 다크모드 화면에서도 잘 보이게.
+struct StretchToastView: View {
+    let text: String
+    let onClose: () -> Void
+    @State private var shown = false
+
+    var body: some View {
+        HStack(spacing: 11) {
+            if let cut = MascotCut.image("work") {
+                cut.resizable().interpolation(.high).scaledToFit().frame(width: 34, height: 34)
+            } else {
+                Text("☕").font(.title2)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text("잠깐, 이거 해볼까요?")
+                    .font(.caption).foregroundStyle(Color(red: 0.55, green: 0.40, blue: 0.25))
+                Text(text)
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(Color(red: 0.24, green: 0.15, blue: 0.08))
+                    .fixedSize(horizontal: false, vertical: true)   // 여러 줄 wrap
+                    .lineLimit(3)
+            }
+            Spacer(minLength: 6)
+            Button(action: onClose) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 16))
+                    .foregroundStyle(Color(red: 0.55, green: 0.40, blue: 0.25).opacity(0.55))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 12)
+        .frame(maxWidth: 440)
+        .background(Color(red: 0.97, green: 0.93, blue: 0.85),
+                    in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous)
+            .strokeBorder(Color(red: 0.80, green: 0.60, blue: 0.30), lineWidth: 1.5))
+        .shadow(color: Color(red: 0.98, green: 0.78, blue: 0.42).opacity(0.6), radius: 18)  // 따뜻한 아웃글로우
+        .shadow(color: .black.opacity(0.22), radius: 6, y: 2)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        .opacity(shown ? 1 : 0)
+        .scaleEffect(shown ? 1 : 0.9)
+        .onAppear {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) { shown = true }
+        }
+    }
+}
+
 /// soft 스타일: 화면 가장자리에 숨쉬듯 번지는 글로우.
 struct VignetteView: View {
     @ObservedObject var engine: BreakEngine

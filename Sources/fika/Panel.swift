@@ -54,17 +54,17 @@ private func stepperRow(_ title: String, _ value: Binding<Double>, _ range: Clos
 // MARK: - 탭
 
 enum PanelTab: CaseIterable {
-    case home, time, alerts, settings
+    case home, time, alerts, stretch, settings
     var title: String {
         switch self {
         case .home: return "상태"; case .time: return "시간"
-        case .alerts: return "알림"; case .settings: return "설정"
+        case .alerts: return "알림"; case .stretch: return "동작"; case .settings: return "설정"
         }
     }
     var icon: String {
         switch self {
         case .home: return "timer"; case .time: return "clock"
-        case .alerts: return "bell.badge"; case .settings: return "gearshape"
+        case .alerts: return "bell.badge"; case .stretch: return "figure.flexibility"; case .settings: return "gearshape"
         }
     }
 }
@@ -130,6 +130,7 @@ struct PanelView: View {
         case .home:     HomeTab(engine: engine)
         case .time:     TimeTab(settings: engine.settings)
         case .alerts:   AlertsTab(settings: engine.settings)
+        case .stretch:  StretchTab(settings: engine.settings)
         case .settings: SettingsTab(settings: engine.settings)
         }
     }
@@ -305,6 +306,44 @@ private struct AlertsTab: View {
                 Sound.play(.breakEnd, enabled: true)
             } label: {
                 Label("사운드 테스트", systemImage: "speaker.wave.2.fill")
+            }
+            .buttonStyle(PanelButtonStyle())
+        }
+    }
+}
+
+// MARK: - 동작 탭
+
+private struct StretchTab: View {
+    @ObservedObject var settings: AppSettings
+
+    private var tipsText: Binding<String> {
+        Binding(
+            get: { settings.stretchTips.joined(separator: "\n") },
+            set: { settings.stretchTips = $0.split(separator: "\n", omittingEmptySubsequences: true).map(String.init) }
+        )
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            sectionHeader("동작 알림")
+            Text("작업 중 앉아서 가볍게 할 동작을 주기적으로 알려줘요. 5초간 살짝 떴다 사라집니다.")
+                .font(.caption).foregroundStyle(.secondary)
+
+            Toggle("작업 중 동작 알림 켜기", isOn: $settings.microBreakEnabled)
+            if settings.microBreakEnabled {
+                stepperRow("알림 주기(분)", $settings.microBreakMinutes, 5...120, 5)
+            }
+
+            Divider()
+            sectionHeader("동작 문구 (한 줄에 하나)")
+            TextEditor(text: tipsText)
+                .font(.callout)
+                .frame(height: 170)
+                .padding(4)
+                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(.primary.opacity(0.15)))
+            Button { settings.stretchTips = AppSettings.defaultStretchTips } label: {
+                Label("기본 문구로 되돌리기", systemImage: "arrow.counterclockwise")
             }
             .buttonStyle(PanelButtonStyle())
         }

@@ -42,6 +42,20 @@ enum BreakStyle: String, CaseIterable, Identifiable {
 final class AppSettings: ObservableObject {
     private let d = UserDefaults.standard
 
+    /// 앉아서 일하며 할 수 있는 기본 동작 문구. (사용자가 설정에서 편집 가능)
+    static let defaultStretchTips = [
+        "고개를 천천히 좌우로 기울여요 (각 5초)",
+        "어깨를 으쓱 올렸다가 툭 내려요 (3번)",
+        "먼 곳을 20초 바라봐요 — 눈도 쉬어야죠",
+        "손목을 천천히 돌려요 (양쪽 5바퀴씩)",
+        "의자에 기대 등을 쭉 펴고 가슴을 열어요",
+        "발목을 위아래로 까딱까딱 (혈액순환!)",
+        "코로 깊게 들이쉬고, 천천히 내쉬어요 (3번)",
+        "고개를 크게 천천히 한 바퀴 돌려요",
+        "손가락을 쫙 폈다 주먹 쥐기 (10번)",
+        "잠깐 일어나서 온몸을 쭉 펴요",
+    ]
+
     @Published var workMinutes: Double            { didSet { d.set(workMinutes, forKey: "workMinutes") } }
     @Published var breakMinutes: Double           { didSet { d.set(breakMinutes, forKey: "breakMinutes") } }
     @Published var longBreakEnabled: Bool         { didSet { d.set(longBreakEnabled, forKey: "longBreakEnabled") } }
@@ -58,6 +72,12 @@ final class AppSettings: ObservableObject {
     @Published var idleThresholdMinutes: Double   { didSet { d.set(idleThresholdMinutes, forKey: "idleThresholdMinutes") } }
     @Published var launchAtLogin: Bool            { didSet { d.set(launchAtLogin, forKey: "launchAtLogin"); LoginItem.set(launchAtLogin) } }
     @Published var debugMode: Bool                { didSet { d.set(debugMode, forKey: "debugMode"); Log.debugEnabled = debugMode } }
+    /// 휴식·마이크로 알림에 보여줄 동작 문구 목록
+    @Published var stretchTips: [String]          { didSet { d.set(stretchTips, forKey: "stretchTips") } }
+    /// 작업 중 주기적으로 동작 알림(마이크로 브레이크)을 띄울지
+    @Published var microBreakEnabled: Bool        { didSet { d.set(microBreakEnabled, forKey: "microBreakEnabled") } }
+    /// 마이크로 브레이크 주기(분)
+    @Published var microBreakMinutes: Double      { didSet { d.set(microBreakMinutes, forKey: "microBreakMinutes") } }
 
     init() {
         let store = UserDefaults.standard
@@ -81,6 +101,10 @@ final class AppSettings: ObservableObject {
         idleThresholdMinutes  = dbl("idleThresholdMinutes", 5)
         launchAtLogin         = bool("launchAtLogin", false)
         debugMode             = bool("debugMode", false)
+        let savedTips = store.array(forKey: "stretchTips") as? [String]
+        stretchTips           = (savedTips?.isEmpty == false ? savedTips! : Self.defaultStretchTips)
+        microBreakEnabled     = bool("microBreakEnabled", true)
+        microBreakMinutes     = dbl("microBreakMinutes", 10)
         Log.debugEnabled = debugMode
     }
 
