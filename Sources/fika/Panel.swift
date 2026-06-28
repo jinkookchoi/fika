@@ -169,13 +169,18 @@ private struct RingView: View {
 
 private struct HomeTab: View {
     @ObservedObject var engine: BreakEngine
+    @ObservedObject private var stats = SessionStore.shared
 
     var body: some View {
         VStack(spacing: 14) {
             RingView(engine: engine)
 
-            Text("완료한 작업 세션 \(engine.completedWork)회")
-                .font(.caption).foregroundStyle(.secondary)
+            VStack(spacing: 2) {
+                Text("오늘 \(stats.today.sessions)회 · \(SessionStore.hm(stats.today.minutes)) 집중")
+                    .font(.caption).foregroundStyle(.secondary)
+                Text("이번 주 \(stats.thisWeek.sessions)회 · \(SessionStore.hm(stats.thisWeek.minutes))")
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
 
             VStack(spacing: 8) {
                 Button { engine.togglePause() } label: {

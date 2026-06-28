@@ -292,6 +292,7 @@ final class BreakEngine: ObservableObject {
     }
 
     private func enterBreak() {
+        SessionStore.shared.record(minutes: phaseDuration / 60, at: Date())  // 직전 작업 세션 (phase 바뀌기 전)
         completedWork += 1
         isLongBreak = settings.longBreakEnabled
             && settings.cyclesBeforeLongBreak > 0
