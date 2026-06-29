@@ -34,7 +34,7 @@ pkill -f MacOS/Fika     # 종료
 | `Settings.swift` | 설정 모델 **`AppSettings`** (UserDefaults 자동 저장) + enum들 |
 | `Panel.swift` | 메뉴바 팝오버 통합 UI(탭바·상태/시간/알림/동작/분석/설정 6탭·진행 링·차트·버튼 스타일) |
 | `Idle.swift` | IOKit `IOHIDSystem`/`HIDIdleTime`으로 유휴 시간 측정(모든 HID 입력) |
-| `OverlayController/Views/Windows.swift` | 휴식 오버레이·예고 배너·시작 토스트 윈도우 |
+| `OverlayController/Views/Windows.swift` | 휴식 오버레이·예고 배너·시작/동작/남은시간 토스트·메뉴바 호버 팁 윈도우 |
 | `CoffeeAnimation.swift` | **메뉴바 커피 마스코트** — Veo 영상에서 뽑은 프레임 시퀀스 재생(상태별 work/warning/done). `Resources/coffee/<상태>/frame_NNN.png` |
 | `MascotCut.swift` | 화면 UI(휴식·예고·복귀·토스트·진행 링)용 마스코트 정지 컷. `Resources/cuts/<상태>.png` |
 | `CoffeeIcon.swift` | 절차적 커피잔(코드 드로잉). 지금은 메뉴바 폴백용(영상 프레임 없을 때만) |
@@ -62,5 +62,7 @@ pkill -f MacOS/Fika     # 종료
 - 설정 변경은 저장 버튼 없이 즉시 적용(작업/휴식 "분"은 다음 단계부터 반영).
 - **데이터 저장**: 설정은 UserDefaults, 집중 세션 기록은 `~/Library/Application Support/Fika/sessions.json`(Codable JSON). 둘 다 앱 번들과 별개라 재설치/재빌드해도 유지된다.
 - **집중 세션은 "완료분"만 집계** — 작업→휴식 정상 전환(`enterBreak`) 시 1건 기록(`SessionStore.record`). 리셋·딴짓한 미완료 세션은 안 센다.
-- **작업 중 동작 알림(마이크로 브레이크)**: `microBreakEnabled`(기본 켬)면 작업 중 `microBreakMinutes`마다 동작 토스트. 곧 휴식 예고 구간엔 안 띄운다. 동작 문구는 `stretchTips`(설정에서 편집).
+- **작업 중 동작 알림(마이크로 브레이크)**: `microBreakEnabled`(기본 켬)면 작업 중 `microBreakMinutes`마다 동작 토스트. 곧 휴식 예고 구간엔 안 띄운다. 동작 문구는 `stretchTips`(설정에서 편집). UI는 **동작 탭**(가만히 앉아 있지 말라는 신체 동작 전용).
+- **남은 시간 알림**: `timeNoticeEnabled`(기본 끔)·`timeNoticeMinutes`. **메뉴바 시간 표시(`showMenuBarTime`)와 무관한 별도 토글**(UI는 **알림 탭**). 작업 중 주기마다 "휴식까지 N분" 토스트(`TimeNoticeToastView`). 동작 알림과 **같은 `toastWindow` 슬롯**을 공유하고, 토스트가 떠 있으면 20초 양보(`overlay.isToastVisible`) → 구조적으로 안 겹친다.
+- **메뉴바 호버 팁**: 시간을 감췄을 때(`showMenuBarTime=false`) 상태아이템에 마우스를 올리면 상태·남은 시간을 작은 카드(`HoverTipView`)로 표시. OS 툴팁 대신 직접 구현(지연 없음). 트래킹은 `NSTrackingArea(.inVisibleRect)`, 셀렉터는 `@objc(mouseEntered:)`/`@objc(mouseExited:)`로 명시(AppDelegate가 NSResponder가 아니라서).
 - git 신원은 이 레포 로컬로 개인 계정(`Jinkook Choi <jinkookchoi@gmail.com>`) 설정됨(전역은 회사 계정).
