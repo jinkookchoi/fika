@@ -307,6 +307,15 @@ private struct AlertsTab: View {
             .background(RoundedRectangle(cornerRadius: 8).fill(.primary.opacity(0.05)))
 
             Divider()
+            sectionHeader("남은 시간 알림")
+            Text("메뉴바 시간 표시와 별개로, 작업 중 \"휴식까지 N분\"을 주기적으로 잠깐 띄워요.")
+                .font(.caption).foregroundStyle(.secondary)
+            Toggle("남은 시간 알림 켜기", isOn: $settings.timeNoticeEnabled)
+            if settings.timeNoticeEnabled {
+                stepperRow("알림 주기(분)", $settings.timeNoticeMinutes, 5...120, 5)
+            }
+
+            Divider()
             sectionHeader("휴식 알림 방식")
             Picker("", selection: $settings.breakStyle) {
                 ForEach(BreakStyle.allCases) { Text($0.label).tag($0) }

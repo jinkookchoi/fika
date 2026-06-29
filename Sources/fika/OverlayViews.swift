@@ -160,6 +160,89 @@ struct StretchToastView: View {
     }
 }
 
+/// 작업 중 주기적으로 잠깐 떴다 사라지는 "남은 시간" 알림 토스트.
+/// (메뉴바 시간 표시와 무관한 별도 기능. 동작 알림과 같은 카드 스타일.)
+struct TimeNoticeToastView: View {
+    @ObservedObject var engine: BreakEngine
+    let onClose: () -> Void
+    @State private var shown = false
+
+    /// 분 단위로 올림(1분 미만도 "1분"으로). 보일 때 한 번 스냅샷이면 충분.
+    private var minutesLeft: Int { max(1, Int((engine.remaining / 60).rounded(.up))) }
+
+    var body: some View {
+        HStack(spacing: 11) {
+            if let cut = MascotCut.image(engine.mascotCut) {
+                cut.resizable().interpolation(.high).scaledToFit().frame(width: 34, height: 34)
+            } else {
+                Text("☕").font(.title2)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text("아직 집중 중이에요")
+                    .font(.caption).foregroundStyle(Color(red: 0.55, green: 0.40, blue: 0.25))
+                Text("휴식까지 \(minutesLeft)분 남았어요")
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(Color(red: 0.24, green: 0.15, blue: 0.08))
+            }
+            Spacer(minLength: 6)
+            Button(action: onClose) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 16))
+                    .foregroundStyle(Color(red: 0.55, green: 0.40, blue: 0.25).opacity(0.55))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 12)
+        .frame(maxWidth: 440)
+        .background(Color(red: 0.97, green: 0.93, blue: 0.85),
+                    in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous)
+            .strokeBorder(Color(red: 0.80, green: 0.60, blue: 0.30), lineWidth: 1.5))
+        .shadow(color: Color(red: 0.98, green: 0.78, blue: 0.42).opacity(0.6), radius: 18)
+        .shadow(color: .black.opacity(0.22), radius: 6, y: 2)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        .opacity(shown ? 1 : 0)
+        .scaleEffect(shown ? 1 : 0.9)
+        .onAppear {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) { shown = true }
+        }
+    }
+}
+
+/// 메뉴바에서 시간을 감췄을 때, 아이콘에 마우스를 올리면 뜨는 작은 호버 팁.
+/// (OS 툴팁 대신 우리 스타일로. engine 을 관찰해 남은 시간이 실시간 갱신된다.)
+struct HoverTipView: View {
+    @ObservedObject var engine: BreakEngine
+    @State private var shown = false
+
+    var body: some View {
+        HStack(spacing: 9) {
+            if let cut = MascotCut.image(engine.mascotCut) {
+                cut.resizable().interpolation(.high).scaledToFit().frame(width: 26, height: 26)
+            } else {
+                Text("☕").font(.body)
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(engine.phaseLabel)
+                    .font(.caption2).foregroundStyle(Color(red: 0.55, green: 0.40, blue: 0.25))
+                Text(engine.menuTimeString)
+                    .font(.callout.weight(.semibold).monospacedDigit())
+                    .foregroundStyle(Color(red: 0.24, green: 0.15, blue: 0.08))
+            }
+        }
+        .padding(.horizontal, 12).padding(.vertical, 8)
+        .background(Color(red: 0.97, green: 0.93, blue: 0.85),
+                    in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+            .strokeBorder(Color(red: 0.80, green: 0.60, blue: 0.30), lineWidth: 1.2))
+        .shadow(color: .black.opacity(0.20), radius: 6, y: 2)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .opacity(shown ? 1 : 0)
+        .scaleEffect(shown ? 1 : 0.92, anchor: .top)
+        .onAppear { withAnimation(.spring(response: 0.28, dampingFraction: 0.75)) { shown = true } }
+    }
+}
+
 /// soft 스타일: 화면 가장자리에 숨쉬듯 번지는 글로우.
 struct VignetteView: View {
     @ObservedObject var engine: BreakEngine

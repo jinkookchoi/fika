@@ -27,6 +27,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // 고정폭 숫자 폰트 → 카운트다운 시 폭이 출렁이지 않음.
             let size = button.font?.pointSize ?? NSFont.systemFontSize
             button.font = .monospacedDigitSystemFont(ofSize: size, weight: .regular)
+            // 마우스 오버 추적 → 시간 감춤 상태에서 호버 팁을 띄운다.
+            // .inVisibleRect: 버튼 폭이 바뀌어도(시간 표시 on/off) 추적 영역이 자동으로 따라간다.
+            button.addTrackingArea(NSTrackingArea(
+                rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+                owner: self, userInfo: nil))
         }
         updateButton()
 
@@ -72,6 +77,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func togglePopover(_ sender: Any?) {
+        engine.hideMenuHoverTip()   // 팝오버 열면 호버 팁은 치운다.
         if popover.isShown {
             popover.performClose(sender)
         } else if let button = statusItem.button {
@@ -79,6 +85,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             popover.contentViewController?.view.window?.makeKey()
         }
+    }
+
+    // MARK: - 메뉴바 아이콘 호버 (시간 감춤 상태에서만 팁 표시)
+
+    // 트래킹 영역은 owner 에게 `mouseEntered:`/`mouseExited:` 셀렉터를 보낸다.
+    // AppDelegate 는 NSResponder 가 아니므로 셀렉터를 명시해 매핑한다.
+    @objc(mouseEntered:) func mouseEntered(with event: NSEvent) {
+        // 시간이 이미 보이거나 패널이 열려 있으면 팁 불필요.
+        guard !engine.settings.showMenuBarTime, !popover.isShown,
+              let frame = statusItem.button?.window?.frame else { return }
+        engine.showMenuHoverTip(near: frame)
+    }
+
+    @objc(mouseExited:) func mouseExited(with event: NSEvent) {
+        engine.hideMenuHoverTip()
     }
 }
 

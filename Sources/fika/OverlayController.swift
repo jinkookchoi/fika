@@ -137,6 +137,45 @@ final class OverlayController {
         }
     }
 
+    /// 토스트(시작/동작/시간 알림)가 지금 떠 있는지. (서로 겹치지 않게 양보 판단용)
+    var isToastVisible: Bool { toastWindow != nil }
+
+    /// 작업 중 주기적 "휴식까지 N분 남았어요" 알림. 동작 알림과 같은 슬롯을 쓴다(겹침 방지).
+    func showTimeNotice() {
+        hideStartToast()
+        guard let screen = NSScreen.main else { return }
+        let w: CGFloat = 520, h: CGFloat = 140   // 토스트 + 글로우 여백
+        let f = screen.visibleFrame
+        let rect = NSRect(x: f.midX - w / 2, y: f.maxY - h - 16, width: w, height: h)
+        let win = makeWindow(frame: rect, level: .statusBar, passThrough: false)
+        setHosted(win, TimeNoticeToastView(engine: engine, onClose: { [weak self] in self?.hideStartToast() }))
+        win.orderFront(nil)
+        toastWindow = win
+        toastTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: false) { [weak self] _ in
+            Task { @MainActor in self?.hideStartToast() }
+        }
+    }
+
+    // MARK: - 메뉴바 호버 팁 (시간 감춤 상태에서 아이콘에 마우스 올리면)
+
+    private var hoverTipWindow: NSWindow?
+
+    /// `anchor` 는 메뉴바 상태아이템의 화면 프레임. 그 바로 아래 중앙에 팁을 띄운다.
+    func showHoverTip(near anchor: NSRect) {
+        if hoverTipWindow != nil { return }   // 이미 떠 있으면 유지(깜빡임 방지)
+        let w: CGFloat = 160, h: CGFloat = 56
+        let rect = NSRect(x: anchor.midX - w / 2, y: anchor.minY - h - 2, width: w, height: h)
+        let win = makeWindow(frame: rect, level: .statusBar, passThrough: true)
+        setHosted(win, HoverTipView(engine: engine))
+        win.orderFront(nil)
+        hoverTipWindow = win
+    }
+
+    func hideHoverTip() {
+        hoverTipWindow?.orderOut(nil)
+        hoverTipWindow = nil
+    }
+
     // MARK: -
 
     /// SwiftUI 뷰를 borderless 창의 contentView 로 얹는다.

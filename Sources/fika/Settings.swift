@@ -78,6 +78,10 @@ final class AppSettings: ObservableObject {
     @Published var microBreakEnabled: Bool        { didSet { d.set(microBreakEnabled, forKey: "microBreakEnabled") } }
     /// 마이크로 브레이크 주기(분)
     @Published var microBreakMinutes: Double      { didSet { d.set(microBreakMinutes, forKey: "microBreakMinutes") } }
+    /// 작업 중 주기적으로 "남은 시간" 토스트를 띄울지 (메뉴바 시간 표시와 무관한 별도 토글)
+    @Published var timeNoticeEnabled: Bool        { didSet { d.set(timeNoticeEnabled, forKey: "timeNoticeEnabled") } }
+    /// 남은 시간 알림 주기(분)
+    @Published var timeNoticeMinutes: Double      { didSet { d.set(timeNoticeMinutes, forKey: "timeNoticeMinutes") } }
 
     init() {
         let store = UserDefaults.standard
@@ -105,6 +109,8 @@ final class AppSettings: ObservableObject {
         stretchTips           = (savedTips?.isEmpty == false ? savedTips! : Self.defaultStretchTips)
         microBreakEnabled     = bool("microBreakEnabled", true)
         microBreakMinutes     = dbl("microBreakMinutes", 10)
+        timeNoticeEnabled     = bool("timeNoticeEnabled", false)
+        timeNoticeMinutes     = dbl("timeNoticeMinutes", 5)
         Log.debugEnabled = debugMode
     }
 

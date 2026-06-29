@@ -42,7 +42,13 @@ final class BreakEngine: ObservableObject {
     private var sleepAt: Date?
     /// 다음 마이크로 브레이크(작업 중 동작 알림) 예정 시각
     private var nextMicroBreak: Date = .distantFuture
+    /// 다음 "남은 시간 알림" 토스트 예정 시각
+    private var nextTimeNotice: Date = .distantFuture
     private lazy var overlay = OverlayController(engine: self)
+
+    /// 메뉴바 호버 팁 표시/숨김 (AppDelegate 의 트래킹에서 호출).
+    func showMenuHoverTip(near anchor: NSRect) { overlay.showHoverTip(near: anchor) }
+    func hideMenuHoverTip() { overlay.hideHoverTip() }
 
     private init() {
         startWork()
@@ -171,6 +177,7 @@ final class BreakEngine: ObservableObject {
             }
         }
         handleMicroBreak()
+        handleTimeNotice()
         refreshPresentation()
     }
 
@@ -185,6 +192,20 @@ final class BreakEngine: ObservableObject {
             }
             nextMicroBreak = Date().addingTimeInterval(settings.microBreakMinutes * 60)
         }
+    }
+
+    /// 작업 중 주기적으로 "휴식까지 N분 남았어요" 토스트를 띄운다.
+    /// 메뉴바 시간 표시와 무관한 별도 토글. 동작 알림 토스트가 떠 있으면 겹치지 않게 양보한다.
+    private func handleTimeNotice() {
+        guard settings.timeNoticeEnabled, phase == .working, !isAway, !isWarning else { return }
+        guard Date() >= nextTimeNotice else { return }
+        if overlay.isToastVisible {                                  // 동작 알림 등과 겹침 방지
+            nextTimeNotice = Date().addingTimeInterval(20)           // 잠깐 미뤘다 다시 시도
+            return
+        }
+        overlay.showTimeNotice()
+        nextTimeNotice = Date().addingTimeInterval(settings.timeNoticeMinutes * 60)
+        Log.debug("남은 시간 알림: \(menuTimeString)")
     }
 
     /// 휴식이 끝났지만 사용자가 아직 안 돌아온 상태.
@@ -281,6 +302,7 @@ final class BreakEngine: ObservableObject {
         isLongBreak = false
         setRemaining(settings.workMinutes * 60)
         nextMicroBreak = Date().addingTimeInterval(settings.microBreakMinutes * 60)
+        nextTimeNotice = Date().addingTimeInterval(settings.timeNoticeMinutes * 60)
         Log.debug("작업 시작 \(Int(settings.workMinutes))분")
     }
 
@@ -358,6 +380,7 @@ final class BreakEngine: ObservableObject {
         isAway = false
         setRemaining(settings.workMinutes * 60)
         nextMicroBreak = Date().addingTimeInterval(settings.microBreakMinutes * 60)
+        nextTimeNotice = Date().addingTimeInterval(settings.timeNoticeMinutes * 60)
         refreshPresentation()
         Log.debug("작업 다시 시작 (수동)")
     }
