@@ -273,7 +273,7 @@ struct ShutdownToastView: View {
 /// 고정 휴식 시간대(예: 점심) 진입 시 잠깐 뜨는 안내 토스트.
 struct ScheduledRestToastView: View {
     let title: String
-    let endText: String
+    let subtitle: String
     let onClose: () -> Void
     @State private var shown = false
 
@@ -288,7 +288,7 @@ struct ScheduledRestToastView: View {
                 Text(title)
                     .font(.callout.weight(.semibold))
                     .foregroundStyle(Color(red: 0.24, green: 0.15, blue: 0.08))
-                Text("\(endText)까지 쉬어요")
+                Text(subtitle)
                     .font(.caption).foregroundStyle(Color(red: 0.55, green: 0.40, blue: 0.25))
             }
             Spacer(minLength: 6)

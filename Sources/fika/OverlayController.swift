@@ -159,17 +159,15 @@ final class OverlayController {
         }
     }
 
-    /// 고정 휴식 시간대 진입 시 잠깐 뜨는 안내 토스트.
-    func showScheduledRestToast(_ label: String, endsAt: Int) {
+    /// 고정 휴식 시간대 진입/사전 예고 토스트.
+    func showScheduledRestToast(title: String, subtitle: String) {
         hideStartToast()
         guard let screen = NSScreen.main else { return }
         let w: CGFloat = 520, h: CGFloat = 140
         let f = screen.visibleFrame
         let rect = NSRect(x: f.midX - w / 2, y: f.maxY - h - 16, width: w, height: h)
-        let endText = String(format: "%02d:%02d", (endsAt / 60) % 24, endsAt % 60)
-        let title = label.isEmpty ? "예약 휴식" : label
         let win = makeWindow(frame: rect, level: .statusBar, passThrough: false)
-        setHosted(win, ScheduledRestToastView(title: title, endText: endText,
+        setHosted(win, ScheduledRestToastView(title: title, subtitle: subtitle,
                                               onClose: { [weak self] in self?.hideStartToast() }))
         win.orderFront(nil)
         toastWindow = win

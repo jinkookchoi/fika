@@ -49,6 +49,9 @@ final class BreakEngine: ObservableObject {
     /// 하루 마무리 알림: 오늘 이미 쏜 단계(30/15/0)와 그 날짜키 (자정에 리셋)
     private var shutdownFiredStages: Set<Int> = []
     private var shutdownFiredDay = -1
+    /// 고정 휴식 사전 예고: 오늘 이미 쐈는지 + 날짜키 (자정에 리셋)
+    private var restPrealertFired = false
+    private var restPrealertDay = -1
     private lazy var overlay = OverlayController(engine: self)
 
     /// 메뉴바 호버 팁 표시/숨김 (AppDelegate 의 트래킹에서 호출).
@@ -189,7 +192,27 @@ final class BreakEngine: ObservableObject {
         handleMicroBreak()
         handleTimeNotice()
         handleShutdown()
+        handleScheduledRestPrealert()
         refreshPresentation()
+    }
+
+    /// 고정 휴식(점심 등) 시작 5분 전에 한 번 예고. (윈도우 밖에서만, 하루 1회, 자정 리셋)
+    private func handleScheduledRestPrealert() {
+        guard settings.scheduledRestEnabled, phase != .scheduledRest else { return }
+        let now = Date()
+        let day = Self.dayKey(now)
+        if day != restPrealertDay {
+            restPrealertDay = day
+            restPrealertFired = false
+        }
+        guard !restPrealertFired else { return }
+        let until = settings.secondsUntilScheduledRestStart(now)
+        guard until > 0, until <= 5 * 60 else { return }
+        restPrealertFired = true
+        let label = settings.scheduledRestLabel.isEmpty ? "예약 휴식" : settings.scheduledRestLabel
+        let mins = max(1, Int((until / 60).rounded(.up)))
+        overlay.showScheduledRestToast(title: "곧 \(label)이에요", subtitle: "\(mins)분 뒤 시작해요")
+        Log.event("예약 휴식 사전 예고 (\(mins)분 전)")
     }
 
     /// 하루 마무리 알림. 마칠 시각 30/15/0분 전에 한 번씩 토스트(강제 종료는 안 함).
@@ -267,7 +290,9 @@ final class BreakEngine: ObservableObject {
         remaining = settings.scheduledRestSecondsLeft(Date())
         phaseDuration = max(settings.scheduledRestDurationSeconds, 1)
         overlay.hideWarning()
-        overlay.showScheduledRestToast(settings.scheduledRestLabel, endsAt: settings.scheduledRestEnd)
+        let label = settings.scheduledRestLabel.isEmpty ? "예약 휴식" : settings.scheduledRestLabel
+        let endStr = String(format: "%02d:%02d", (settings.scheduledRestEnd / 60) % 24, settings.scheduledRestEnd % 60)
+        overlay.showScheduledRestToast(title: label, subtitle: "\(endStr)까지 쉬어요")
         refreshPresentation()                                          // 화면은 덮지 않음(가벼운 모드)
         Log.event("예약 휴식 진입 (\(settings.scheduledRestLabel))")
     }
