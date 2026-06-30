@@ -159,12 +159,16 @@ App Store 등록 없이도 배포할 수 있습니다. 비공개 레포라면 �
 레포를 받아 [위 "빌드 & 실행"](#빌드--실행)대로 `./build.sh && open Fika.app` 하면 됩니다.
 ```bash
 xcode-select --install                  # 처음 한 번만
-git clone <레포-URL> && cd fika
+git clone https://github.com/jinkookchoi/fika.git && cd fika
 ```
 직접 빌드하면 격리(quarantine) 속성이 붙지 않아 경고 없이 바로 실행됩니다.
 
-### B. 빌드된 .app 내려받기 (GitHub Releases 등)
-다운로드한 앱은 ad-hoc 서명이라 격리 속성을 한 번 풀어 줘야 합니다:
+### B. 빌드된 .app 내려받기 (가장 간편)
+항상 최신 빌드는 이 고정 링크에서 받습니다:
+
+**→ https://github.com/jinkookchoi/fika/releases/latest/download/Fika.zip**
+
+압축을 풀어 `Fika.app`을 `/Applications`로 드래그하세요. 다운로드한 앱은 ad-hoc 서명이라 격리 속성을 한 번 풀어 줘야 합니다:
 ```bash
 xattr -dr com.apple.quarantine /Applications/Fika.app
 ```
