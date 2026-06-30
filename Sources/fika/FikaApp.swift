@@ -59,10 +59,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .coffee:
             // 상태별 영상 마스코트 프레임 재생. (일시정지·자리비움이면 정지 프레임)
             let clip: CoffeeAnimation.Clip =
-                engine.phase == .breakHold ? .done
+                (engine.phase == .breakHold || engine.phase == .scheduledRest) ? .done
                 : (engine.phase == .working && engine.isWarning) ? .warning
                 : .work
-            let frozen = engine.phase == .paused || engine.isAway
+            let frozen = engine.phase == .paused || engine.isAway || engine.phase == .scheduledRest
             button.image = frozen ? CoffeeAnimation.still(clip) : CoffeeAnimation.next(clip)
             button.imagePosition = showTime ? .imageLeading : .imageOnly
             button.title = showTime ? " \(engine.menuTimeString)" : ""

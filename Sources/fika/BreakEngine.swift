@@ -2,17 +2,19 @@ import SwiftUI
 import AppKit
 
 enum Phase: CustomStringConvertible {
-    case working    // 작업 중
-    case breaking   // 휴식 중
-    case breakHold  // 휴식 시간은 끝났고, 사용자가 돌아오길 기다리는 중
-    case paused     // 일시정지
+    case working       // 작업 중
+    case breaking      // 휴식 중
+    case breakHold     // 휴식 시간은 끝났고, 사용자가 돌아오길 기다리는 중
+    case paused        // 일시정지
+    case scheduledRest // 고정 휴식 시간대(예: 점심) — 작업 사이클을 멈추고 쉼
 
     var description: String {
         switch self {
-        case .working:   return "working"
-        case .breaking:  return "breaking"
-        case .breakHold: return "breakHold"
-        case .paused:    return "paused"
+        case .working:       return "working"
+        case .breaking:      return "breaking"
+        case .breakHold:     return "breakHold"
+        case .paused:        return "paused"
+        case .scheduledRest: return "scheduledRest"
         }
     }
 }
@@ -80,10 +82,11 @@ final class BreakEngine: ObservableObject {
     var phaseLabel: String {
         if isAway { return "자리 비움" }
         switch phase {
-        case .working:   return isWarning ? "곧 휴식" : "작업 중"
-        case .breaking:  return isLongBreak ? "긴 휴식" : "휴식 중"
-        case .breakHold: return "휴식 완료"
-        case .paused:    return "일시정지"
+        case .working:       return isWarning ? "곧 휴식" : "작업 중"
+        case .breaking:      return isLongBreak ? "긴 휴식" : "휴식 중"
+        case .breakHold:     return "휴식 완료"
+        case .paused:        return "일시정지"
+        case .scheduledRest: return settings.scheduledRestLabel.isEmpty ? "예약 휴식" : settings.scheduledRestLabel
         }
     }
 
@@ -92,7 +95,7 @@ final class BreakEngine: ObservableObject {
     /// 현재 상태에 맞는 마스코트 컷 이름 (cuts/<name>.png).
     var mascotCut: String {
         if phase == .breakHold { return "done" }
-        if phase == .breaking { return "resting" }
+        if phase == .breaking || phase == .scheduledRest { return "resting" }
         if phase == .working && isWarning { return "warning" }
         return "work"
     }
@@ -110,7 +113,7 @@ final class BreakEngine: ObservableObject {
     var coffeeLevel: Double {
         let activePhase = (phase == .paused) ? phaseBeforePause : phase
         switch activePhase {
-        case .breaking:  return 1 - progress   // 휴식하며 다시 채움
+        case .breaking, .scheduledRest: return 1 - progress   // 휴식하며 다시 채움
         case .breakHold: return 1              // 가득 채운 채 복귀 대기
         default:         return progress        // 작업하며 줄어듦 (자리비움 시 동결)
         }
@@ -124,6 +127,7 @@ final class BreakEngine: ObservableObject {
         case .breaking:  return isLongBreak ? .indigo : .teal
         case .breakHold: return .mint
         case .paused:    return .gray
+        case .scheduledRest: return .teal
         }
     }
 
@@ -135,6 +139,7 @@ final class BreakEngine: ObservableObject {
         case .breaking:  return isLongBreak ? "🌙" : "☕️"
         case .breakHold: return "✅"
         case .paused:    return "⏸️"
+        case .scheduledRest: return "☕️"
         }
     }
 
@@ -146,6 +151,7 @@ final class BreakEngine: ObservableObject {
         case .breaking:  return isLongBreak ? "moon.stars.fill" : "cup.and.saucer.fill"
         case .breakHold: return "checkmark.circle.fill"
         case .paused:    return "pause.fill"
+        case .scheduledRest: return "cup.and.saucer.fill"
         }
     }
 
@@ -158,6 +164,7 @@ final class BreakEngine: ObservableObject {
 
     private func tick() {
         guard phase != .paused else { return }
+        if handleScheduledRest() { return }   // 고정 휴식 시간대면 평소 로직을 건너뛴다
         if settings.idleResetEnabled {
             handleIdle()
         } else if isAway {
@@ -173,12 +180,59 @@ final class BreakEngine: ObservableObject {
             switch phase {
             case .working:  enterBreak()
             case .breaking: endBreak()
-            case .breakHold, .paused: break
+            case .breakHold, .paused, .scheduledRest: break
             }
         }
         handleMicroBreak()
         handleTimeNotice()
         refreshPresentation()
+    }
+
+    /// 고정 휴식 시간대(예: 점심) 처리. 진입/유지/이탈을 처리했으면 true 를 돌려 평소 로직을 건너뛴다.
+    /// 절대 시각 기반이라 sleep/wake 보정이 따로 필요 없다(깨어나면 "지금 시각이 윈도우 안인가"만 본다).
+    private func handleScheduledRest() -> Bool {
+        let inWindow = settings.isWithinScheduledRest(Date())
+        if phase == .scheduledRest {
+            if inWindow {
+                remaining = settings.scheduledRestSecondsLeft(Date())   // 윈도우 끝까지 남은 시간
+                refreshPresentation()
+                return true
+            }
+            Log.event("예약 휴식 종료 → 작업 시작")
+            startWorkFromBreak()                                        // 작업 새로 시작 + 시작 토스트
+            return true
+        }
+        if inWindow {
+            enterScheduledRest()
+            return true
+        }
+        return false
+    }
+
+    private func enterScheduledRest() {
+        phase = .scheduledRest
+        isAway = false
+        isLongBreak = false
+        remaining = settings.scheduledRestSecondsLeft(Date())
+        phaseDuration = max(settings.scheduledRestDurationSeconds, 1)
+        overlay.hideWarning()
+        overlay.showScheduledRestToast(settings.scheduledRestLabel, endsAt: settings.scheduledRestEnd)
+        refreshPresentation()                                          // 화면은 덮지 않음(가벼운 모드)
+        Log.event("예약 휴식 진입 (\(settings.scheduledRestLabel))")
+    }
+
+    /// 작업/휴식 중일 때, 곧 올 고정 휴식까지 남은 시간 안내 문자열(설정 켜졌고 6시간 이내일 때만).
+    var scheduledRestUpcoming: String? {
+        guard settings.scheduledRestEnabled, phase != .scheduledRest, phase != .paused else { return nil }
+        let left = settings.secondsUntilScheduledRestStart(Date())
+        guard left <= 6 * 3600 else { return nil }
+        let label = settings.scheduledRestLabel.isEmpty ? "예약 휴식" : settings.scheduledRestLabel
+        return "\(label)까지 \(Self.hmShort(left))"
+    }
+
+    static func hmShort(_ t: TimeInterval) -> String {
+        let m = max(0, Int(t / 60))
+        return m >= 60 ? "\(m / 60)시간 \(m % 60)분" : "\(m)분"
     }
 
     /// 작업 중 주기적으로 동작 알림(마이크로 브레이크)을 띄운다.
@@ -410,7 +464,7 @@ final class BreakEngine: ObservableObject {
             phase = .working
             isLongBreak = false
             setRemaining(extra)
-        case .breakHold, .paused:
+        case .breakHold, .paused, .scheduledRest:
             break
         }
         refreshPresentation()

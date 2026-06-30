@@ -140,6 +140,25 @@ final class OverlayController {
     /// 토스트(시작/동작/시간 알림)가 지금 떠 있는지. (서로 겹치지 않게 양보 판단용)
     var isToastVisible: Bool { toastWindow != nil }
 
+    /// 고정 휴식 시간대 진입 시 잠깐 뜨는 안내 토스트.
+    func showScheduledRestToast(_ label: String, endsAt: Int) {
+        hideStartToast()
+        guard let screen = NSScreen.main else { return }
+        let w: CGFloat = 520, h: CGFloat = 140
+        let f = screen.visibleFrame
+        let rect = NSRect(x: f.midX - w / 2, y: f.maxY - h - 16, width: w, height: h)
+        let endText = String(format: "%02d:%02d", (endsAt / 60) % 24, endsAt % 60)
+        let title = label.isEmpty ? "예약 휴식" : label
+        let win = makeWindow(frame: rect, level: .statusBar, passThrough: false)
+        setHosted(win, ScheduledRestToastView(title: title, endText: endText,
+                                              onClose: { [weak self] in self?.hideStartToast() }))
+        win.orderFront(nil)
+        toastWindow = win
+        toastTimer = Timer.scheduledTimer(withTimeInterval: 6, repeats: false) { [weak self] _ in
+            Task { @MainActor in self?.hideStartToast() }
+        }
+    }
+
     /// 작업 중 주기적 "휴식까지 N분 남았어요" 알림. 동작 알림과 같은 슬롯을 쓴다(겹침 방지).
     func showTimeNotice() {
         hideStartToast()

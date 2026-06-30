@@ -82,6 +82,13 @@ final class AppSettings: ObservableObject {
     @Published var timeNoticeEnabled: Bool        { didSet { d.set(timeNoticeEnabled, forKey: "timeNoticeEnabled") } }
     /// 남은 시간 알림 주기(분)
     @Published var timeNoticeMinutes: Double      { didSet { d.set(timeNoticeMinutes, forKey: "timeNoticeMinutes") } }
+    /// 고정 휴식 시간대 사용 (예: 점심 11:30~13:00엔 무조건 쉼)
+    @Published var scheduledRestEnabled: Bool     { didSet { d.set(scheduledRestEnabled, forKey: "scheduledRestEnabled") } }
+    /// 시작/끝 (자정 기준 분). 기본 11:30~13:00
+    @Published var scheduledRestStart: Int        { didSet { d.set(scheduledRestStart, forKey: "scheduledRestStart") } }
+    @Published var scheduledRestEnd: Int          { didSet { d.set(scheduledRestEnd, forKey: "scheduledRestEnd") } }
+    /// 시간대 이름 (메뉴바·패널 표시용)
+    @Published var scheduledRestLabel: String     { didSet { d.set(scheduledRestLabel, forKey: "scheduledRestLabel") } }
 
     init() {
         let store = UserDefaults.standard
@@ -111,6 +118,10 @@ final class AppSettings: ObservableObject {
         microBreakMinutes     = dbl("microBreakMinutes", 10)
         timeNoticeEnabled     = bool("timeNoticeEnabled", false)
         timeNoticeMinutes     = dbl("timeNoticeMinutes", 5)
+        scheduledRestEnabled  = bool("scheduledRestEnabled", false)
+        scheduledRestStart    = int("scheduledRestStart", 11 * 60 + 30)
+        scheduledRestEnd      = int("scheduledRestEnd", 13 * 60)
+        scheduledRestLabel    = store.string(forKey: "scheduledRestLabel") ?? "점심 휴식"
         Log.debugEnabled = debugMode
     }
 
@@ -130,5 +141,52 @@ final class AppSettings: ObservableObject {
         idleResetEnabled = true
         holdBreakUntilReturn = true
         idleThresholdMinutes = 5
+        scheduledRestEnabled = false
+        scheduledRestStart = 11 * 60 + 30
+        scheduledRestEnd = 13 * 60
+        scheduledRestLabel = "점심 휴식"
+    }
+
+    // MARK: - 고정 휴식 시간대 계산 (자정 기준 분/초)
+
+    static func minutesOfDay(_ date: Date) -> Int {
+        let c = Calendar.current.dateComponents([.hour, .minute], from: date)
+        let h: Int = c.hour ?? 0
+        let m: Int = c.minute ?? 0
+        return h * 60 + m
+    }
+    private static func secondsOfDay(_ date: Date) -> Double {
+        let c = Calendar.current.dateComponents([.hour, .minute, .second], from: date)
+        let h: Int = c.hour ?? 0
+        let m: Int = c.minute ?? 0
+        let s: Int = c.second ?? 0
+        return Double(h * 3600 + m * 60 + s)
+    }
+    /// 지금이 고정 휴식 시간대 안인지.
+    func isWithinScheduledRest(_ date: Date) -> Bool {
+        guard scheduledRestEnabled, scheduledRestStart != scheduledRestEnd else { return false }
+        let m = Self.minutesOfDay(date)
+        if scheduledRestStart < scheduledRestEnd { return m >= scheduledRestStart && m < scheduledRestEnd }
+        return m >= scheduledRestStart || m < scheduledRestEnd   // 자정 넘김
+    }
+    /// 시간대 전체 길이(초). 진행 링용.
+    var scheduledRestDurationSeconds: TimeInterval {
+        var d = Double(scheduledRestEnd - scheduledRestStart) * 60
+        if d <= 0 { d += 24 * 3600 }
+        return d
+    }
+    /// 시간대 끝까지 남은 초.
+    func scheduledRestSecondsLeft(_ date: Date) -> TimeInterval {
+        let now = Self.secondsOfDay(date)
+        var end = Double(scheduledRestEnd) * 60
+        if end <= now { end += 24 * 3600 }
+        return max(0, end - now)
+    }
+    /// 다음 시간대 시작까지 남은 초.
+    func secondsUntilScheduledRestStart(_ date: Date) -> TimeInterval {
+        let now = Self.secondsOfDay(date)
+        var start = Double(scheduledRestStart) * 60
+        if start <= now { start += 24 * 3600 }
+        return start - now
     }
 }

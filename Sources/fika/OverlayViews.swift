@@ -209,6 +209,52 @@ struct TimeNoticeToastView: View {
     }
 }
 
+/// 고정 휴식 시간대(예: 점심) 진입 시 잠깐 뜨는 안내 토스트.
+struct ScheduledRestToastView: View {
+    let title: String
+    let endText: String
+    let onClose: () -> Void
+    @State private var shown = false
+
+    var body: some View {
+        HStack(spacing: 11) {
+            if let cut = MascotCut.image("resting") {
+                cut.resizable().interpolation(.high).scaledToFit().frame(width: 34, height: 34)
+            } else {
+                Text("☕").font(.title2)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(Color(red: 0.24, green: 0.15, blue: 0.08))
+                Text("\(endText)까지 쉬어요")
+                    .font(.caption).foregroundStyle(Color(red: 0.55, green: 0.40, blue: 0.25))
+            }
+            Spacer(minLength: 6)
+            Button(action: onClose) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 16))
+                    .foregroundStyle(Color(red: 0.55, green: 0.40, blue: 0.25).opacity(0.55))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 12)
+        .frame(maxWidth: 440)
+        .background(Color(red: 0.97, green: 0.93, blue: 0.85),
+                    in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous)
+            .strokeBorder(Color(red: 0.80, green: 0.60, blue: 0.30), lineWidth: 1.5))
+        .shadow(color: Color(red: 0.98, green: 0.78, blue: 0.42).opacity(0.6), radius: 18)
+        .shadow(color: .black.opacity(0.22), radius: 6, y: 2)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        .opacity(shown ? 1 : 0)
+        .scaleEffect(shown ? 1 : 0.9)
+        .onAppear {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) { shown = true }
+        }
+    }
+}
+
 /// 메뉴바에서 시간을 감췄을 때, 아이콘에 마우스를 올리면 뜨는 작은 호버 팁.
 /// (OS 툴팁 대신 우리 스타일로. engine 을 관찰해 남은 시간이 실시간 갱신된다.)
 struct HoverTipView: View {

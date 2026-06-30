@@ -184,6 +184,9 @@ private struct HomeTab: View {
                     .font(.caption).foregroundStyle(.secondary)
                 Text("이번 주 \(stats.thisWeek.sessions)회 · \(SessionStore.hm(stats.thisWeek.minutes))")
                     .font(.caption2).foregroundStyle(.secondary)
+                if let up = engine.scheduledRestUpcoming {
+                    Text(up).font(.caption2).foregroundStyle(.secondary)
+                }
             }
 
             VStack(spacing: 8) {
@@ -202,6 +205,10 @@ private struct HomeTab: View {
                     Button { engine.skipBreak() } label: {
                         Label("작업 시작", systemImage: "play.fill")
                     }
+                } else if engine.phase == .scheduledRest {
+                    Text("고정 휴식 중 — 끝나면 자동으로 작업을 시작해요")
+                        .font(.caption).foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
                 } else {
                     Button { engine.breakNow() } label: {
                         Label("지금 휴식하기", systemImage: "cup.and.saucer.fill")
@@ -258,7 +265,44 @@ private struct TimeTab: View {
             sectionHeader("예고 / 연기")
             stepperRow("휴식 예고 시간(초)", $settings.warningSeconds, 0...300, 15)
             stepperRow("연기 길이(분)", $settings.snoozeMinutes, 1...30, 1)
+
+            Divider().padding(.vertical, 2)
+            sectionHeader("고정 휴식 시간대")
+            Text("매일 정해진 시간엔 작업 사이클을 멈추고 쉬어요 (예: 점심). 화면은 덮지 않아요.")
+                .font(.caption).foregroundStyle(.secondary)
+            Toggle("고정 휴식 사용", isOn: $settings.scheduledRestEnabled)
+            if settings.scheduledRestEnabled {
+                HStack {
+                    Text("시간").foregroundStyle(.secondary)
+                    Spacer()
+                    DatePicker("", selection: timeBinding(\.scheduledRestStart), displayedComponents: .hourAndMinute)
+                        .labelsHidden()
+                    Text("~").foregroundStyle(.secondary)
+                    DatePicker("", selection: timeBinding(\.scheduledRestEnd), displayedComponents: .hourAndMinute)
+                        .labelsHidden()
+                }
+                HStack {
+                    Text("이름").foregroundStyle(.secondary)
+                    Spacer()
+                    TextField("점심 휴식", text: $settings.scheduledRestLabel)
+                        .textFieldStyle(.roundedBorder).frame(width: 150)
+                }
+            }
         }
+    }
+
+    /// Int(자정 기준 분) ↔ DatePicker(Date) 브리지.
+    private func timeBinding(_ key: ReferenceWritableKeyPath<AppSettings, Int>) -> Binding<Date> {
+        Binding(
+            get: {
+                let mins = settings[keyPath: key]
+                return Calendar.current.date(bySettingHour: mins / 60, minute: mins % 60, second: 0, of: Date()) ?? Date()
+            },
+            set: { newDate in
+                let c = Calendar.current.dateComponents([.hour, .minute], from: newDate)
+                settings[keyPath: key] = (c.hour ?? 0) * 60 + (c.minute ?? 0)
+            }
+        )
     }
 }
 
