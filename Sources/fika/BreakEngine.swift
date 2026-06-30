@@ -240,13 +240,15 @@ final class BreakEngine: ObservableObject {
         let timeStr = String(format: "%02d:%02d", h, mm)
         switch offset {
         case 30:
-            overlay.showShutdownToast(title: "슬슬 마무리할 시간이에요", subtitle: "\(timeStr)에 오늘 일을 마쳐요", stop: false)
+            overlay.showShutdownToast(title: "오늘 일 마무리 30분 전이에요",
+                                      subtitle: "\(timeStr)에 마쳐요. 슬슬 준비하세요", stop: false)
         case 15:
-            overlay.showShutdownToast(title: "15분 남았어요", subtitle: "하던 걸 정리해 보세요", stop: false)
+            overlay.showShutdownToast(title: "오늘 일 마무리 15분 전이에요",
+                                      subtitle: "\(timeStr)에 마쳐요. 하던 걸 정리하세요", stop: false)
         default:
             let t = SessionStore.shared.today
-            overlay.showShutdownToast(title: "오늘은 여기까지 ☕",
-                                      subtitle: "오늘 \(t.sessions)회 · \(SessionStore.hm(t.minutes)) 집중했어요",
+            overlay.showShutdownToast(title: "오늘 일은 여기까지예요 ☕",
+                                      subtitle: "오늘 \(t.sessions)회 · \(SessionStore.hm(t.minutes)) 집중했어요. 수고했어요",
                                       stop: true)
         }
     }
