@@ -127,17 +127,25 @@ pkill -f MacOS/Fika   # 종료
 
 ---
 
-## 자동 실행 (로그인 시)
+## ✅ 설치 후 꼭 — 로그인 시 자동 실행 켜기
 
-기본값은 **꺼짐**입니다. 켜려면 **설정 탭 → "로그인 시 자동 실행"**을 누릅니다.
+Fika는 **켜져 있어야 작동**하는 상주 앱입니다. 그런데 자동 실행은 **기본값이 꺼짐**이라,
+이걸 안 켜면 맥을 재시작할 때마다 사라져서 "어, 안 뜨네?" 하게 됩니다.
+**처음 설치하면 한 번만 켜 두세요.**
 
-안정적으로 쓰려면 **`Fika.app`을 `/Applications`로 옮긴 뒤** 켜시길 권장합니다.
-(ad-hoc 서명이라 앱 경로가 바뀌면 등록된 로그인 항목이 깨질 수 있습니다.)
+**설정 탭(맨 오른쪽 ⚙️) → "로그인 시 자동 실행" 체크**
 
-```bash
-cp -R Fika.app /Applications/
-open /Applications/Fika.app
-```
+<p align="center">
+  <img src="docs/login-auto-start.png" alt="설정 탭의 '로그인 시 자동 실행' 체크박스" width="380">
+</p>
+
+> 💡 안정적으로 쓰려면 **`Fika.app`을 `/Applications`로 옮긴 뒤** 켜는 걸 권장합니다.
+> (ad-hoc 서명이라 앱 경로가 바뀌면 등록된 로그인 항목이 깨질 수 있습니다.)
+>
+> ```bash
+> cp -R Fika.app /Applications/
+> open /Applications/Fika.app
+> ```
 
 ---
 
