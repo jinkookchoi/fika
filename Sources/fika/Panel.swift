@@ -360,6 +360,20 @@ private struct AlertsTab: View {
             }
 
             Divider()
+            sectionHeader("하루 마무리 알림")
+            Text("마칠 시각 30분·15분 전과 도래 시 알려줘요. 강제로 끄진 않아요.")
+                .font(.caption).foregroundStyle(.secondary)
+            Toggle("하루 마무리 알림 켜기", isOn: $settings.shutdownEnabled)
+            if settings.shutdownEnabled {
+                HStack {
+                    Text("마칠 시각").foregroundStyle(.secondary)
+                    Spacer()
+                    DatePicker("", selection: shutdownBinding, displayedComponents: .hourAndMinute)
+                        .labelsHidden()
+                }
+            }
+
+            Divider()
             sectionHeader("휴식 알림 방식")
             Picker("", selection: $settings.breakStyle) {
                 ForEach(BreakStyle.allCases) { Text($0.label).tag($0) }
@@ -376,6 +390,20 @@ private struct AlertsTab: View {
             }
             .buttonStyle(PanelButtonStyle())
         }
+    }
+
+    /// Int(자정 기준 분) ↔ DatePicker(Date) 브리지.
+    private var shutdownBinding: Binding<Date> {
+        Binding(
+            get: {
+                let m = settings.shutdownTime
+                return Calendar.current.date(bySettingHour: m / 60, minute: m % 60, second: 0, of: Date()) ?? Date()
+            },
+            set: { newDate in
+                let c = Calendar.current.dateComponents([.hour, .minute], from: newDate)
+                settings.shutdownTime = (c.hour ?? 0) * 60 + (c.minute ?? 0)
+            }
+        )
     }
 }
 

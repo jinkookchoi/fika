@@ -89,6 +89,10 @@ final class AppSettings: ObservableObject {
     @Published var scheduledRestEnd: Int          { didSet { d.set(scheduledRestEnd, forKey: "scheduledRestEnd") } }
     /// 시간대 이름 (메뉴바·패널 표시용)
     @Published var scheduledRestLabel: String     { didSet { d.set(scheduledRestLabel, forKey: "scheduledRestLabel") } }
+    /// 하루 마무리 알림 (마칠 시각 30/15/0분 전에 알림). 강제 종료는 하지 않음.
+    @Published var shutdownEnabled: Bool          { didSet { d.set(shutdownEnabled, forKey: "shutdownEnabled") } }
+    /// 마칠 시각 (자정 기준 분). 기본 18:00
+    @Published var shutdownTime: Int              { didSet { d.set(shutdownTime, forKey: "shutdownTime") } }
 
     init() {
         let store = UserDefaults.standard
@@ -122,6 +126,8 @@ final class AppSettings: ObservableObject {
         scheduledRestStart    = int("scheduledRestStart", 11 * 60 + 30)
         scheduledRestEnd      = int("scheduledRestEnd", 13 * 60)
         scheduledRestLabel    = store.string(forKey: "scheduledRestLabel") ?? "점심 휴식"
+        shutdownEnabled       = bool("shutdownEnabled", false)
+        shutdownTime          = int("shutdownTime", 18 * 60)
         Log.debugEnabled = debugMode
     }
 
@@ -145,6 +151,8 @@ final class AppSettings: ObservableObject {
         scheduledRestStart = 11 * 60 + 30
         scheduledRestEnd = 13 * 60
         scheduledRestLabel = "점심 휴식"
+        shutdownEnabled = false
+        shutdownTime = 18 * 60
     }
 
     // MARK: - 고정 휴식 시간대 계산 (자정 기준 분/초)

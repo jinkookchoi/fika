@@ -140,6 +140,25 @@ final class OverlayController {
     /// 토스트(시작/동작/시간 알림)가 지금 떠 있는지. (서로 겹치지 않게 양보 판단용)
     var isToastVisible: Bool { toastWindow != nil }
 
+    /// 하루 마무리 알림 토스트. `stop`이면 "오늘은 그만(일시정지)" 버튼 포함 + 더 오래 떠 있음.
+    func showShutdownToast(title: String, subtitle: String, stop: Bool) {
+        hideStartToast()
+        guard let screen = NSScreen.main else { return }
+        let w: CGFloat = 520, h: CGFloat = 150
+        let f = screen.visibleFrame
+        let rect = NSRect(x: f.midX - w / 2, y: f.maxY - h - 16, width: w, height: h)
+        let win = makeWindow(frame: rect, level: .statusBar, passThrough: false)
+        setHosted(win, ShutdownToastView(
+            title: title, subtitle: subtitle, showStop: stop,
+            onStop: { [weak self] in self?.engine.quietForToday(); self?.hideStartToast() },
+            onClose: { [weak self] in self?.hideStartToast() }))
+        win.orderFront(nil)
+        toastWindow = win
+        toastTimer = Timer.scheduledTimer(withTimeInterval: stop ? 12 : 6, repeats: false) { [weak self] _ in
+            Task { @MainActor in self?.hideStartToast() }
+        }
+    }
+
     /// 고정 휴식 시간대 진입 시 잠깐 뜨는 안내 토스트.
     func showScheduledRestToast(_ label: String, endsAt: Int) {
         hideStartToast()

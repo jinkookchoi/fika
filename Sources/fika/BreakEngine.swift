@@ -46,6 +46,9 @@ final class BreakEngine: ObservableObject {
     private var nextMicroBreak: Date = .distantFuture
     /// 다음 "남은 시간 알림" 토스트 예정 시각
     private var nextTimeNotice: Date = .distantFuture
+    /// 하루 마무리 알림: 오늘 이미 쏜 단계(30/15/0)와 그 날짜키 (자정에 리셋)
+    private var shutdownFiredStages: Set<Int> = []
+    private var shutdownFiredDay = -1
     private lazy var overlay = OverlayController(engine: self)
 
     /// 메뉴바 호버 팁 표시/숨김 (AppDelegate 의 트래킹에서 호출).
@@ -185,7 +188,55 @@ final class BreakEngine: ObservableObject {
         }
         handleMicroBreak()
         handleTimeNotice()
+        handleShutdown()
         refreshPresentation()
+    }
+
+    /// 하루 마무리 알림. 마칠 시각 30/15/0분 전에 한 번씩 토스트(강제 종료는 안 함).
+    /// 각 단계는 하루 1회만, 자정에 리셋. 너무 늦게 켜면(2분 grace 초과) 지난 단계는 안 쏜다.
+    private func handleShutdown() {
+        guard settings.shutdownEnabled else { return }
+        let now = Date()
+        let day = Self.dayKey(now)
+        if day != shutdownFiredDay {
+            shutdownFiredDay = day
+            shutdownFiredStages = []
+        }
+        let m = AppSettings.minutesOfDay(now)
+        for offset in [30, 15, 0] {
+            let target = settings.shutdownTime - offset
+            guard target >= 0, !shutdownFiredStages.contains(offset), m >= target, m < target + 2 else { continue }
+            shutdownFiredStages.insert(offset)
+            fireShutdownStage(offset)
+            Log.event("하루 마무리 알림 (\(offset == 0 ? "도래" : "\(offset)분 전"))")
+        }
+    }
+
+    private func fireShutdownStage(_ offset: Int) {
+        let h = settings.shutdownTime / 60, mm = settings.shutdownTime % 60
+        let timeStr = String(format: "%02d:%02d", h, mm)
+        switch offset {
+        case 30:
+            overlay.showShutdownToast(title: "슬슬 마무리할 시간이에요", subtitle: "\(timeStr)에 오늘 일을 마쳐요", stop: false)
+        case 15:
+            overlay.showShutdownToast(title: "15분 남았어요", subtitle: "하던 걸 정리해 보세요", stop: false)
+        default:
+            let t = SessionStore.shared.today
+            overlay.showShutdownToast(title: "오늘은 여기까지 ☕",
+                                      subtitle: "오늘 \(t.sessions)회 · \(SessionStore.hm(t.minutes)) 집중했어요",
+                                      stop: true)
+        }
+    }
+
+    private static func dayKey(_ date: Date) -> Int {
+        let c = Calendar.current.dateComponents([.year, .month, .day], from: date)
+        let y = c.year ?? 0, mo = c.month ?? 0, d = c.day ?? 0
+        return y * 10000 + mo * 100 + d
+    }
+
+    /// "오늘은 그만" — Fika 를 조용히(일시정지). 다음 날 작업 시작 때 재개 누르면 됨.
+    func quietForToday() {
+        if phase != .paused { togglePause() }
     }
 
     /// 고정 휴식 시간대(예: 점심) 처리. 진입/유지/이탈을 처리했으면 true 를 돌려 평소 로직을 건너뛴다.

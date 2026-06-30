@@ -209,6 +209,67 @@ struct TimeNoticeToastView: View {
     }
 }
 
+/// 하루 마무리 알림 토스트. 사전(30/15분 전)은 안내만, 도래(0분)는 "오늘은 그만" 버튼 포함.
+struct ShutdownToastView: View {
+    let title: String
+    let subtitle: String
+    let showStop: Bool
+    let onStop: () -> Void
+    let onClose: () -> Void
+    @State private var shown = false
+
+    var body: some View {
+        HStack(spacing: 11) {
+            if let cut = MascotCut.image("done") {
+                cut.resizable().interpolation(.high).scaledToFit().frame(width: 34, height: 34)
+            } else {
+                Text("☕").font(.title2)
+            }
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(Color(red: 0.24, green: 0.15, blue: 0.08))
+                Text(subtitle)
+                    .font(.caption).foregroundStyle(Color(red: 0.55, green: 0.40, blue: 0.25))
+                    .fixedSize(horizontal: false, vertical: true)
+                if showStop {
+                    Button(action: onStop) {
+                        Text("오늘은 그만")
+                            .font(.caption.weight(.semibold))
+                            .padding(.horizontal, 12).padding(.vertical, 5)
+                            .background(Color(red: 0.83, green: 0.59, blue: 0.22),
+                                        in: Capsule())
+                            .foregroundStyle(.white)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 2)
+                }
+            }
+            Spacer(minLength: 6)
+            Button(action: onClose) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 16))
+                    .foregroundStyle(Color(red: 0.55, green: 0.40, blue: 0.25).opacity(0.55))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 12)
+        .frame(maxWidth: 460)
+        .background(Color(red: 0.97, green: 0.93, blue: 0.85),
+                    in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous)
+            .strokeBorder(Color(red: 0.80, green: 0.60, blue: 0.30), lineWidth: 1.5))
+        .shadow(color: Color(red: 0.98, green: 0.78, blue: 0.42).opacity(0.6), radius: 18)
+        .shadow(color: .black.opacity(0.22), radius: 6, y: 2)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        .opacity(shown ? 1 : 0)
+        .scaleEffect(shown ? 1 : 0.9)
+        .onAppear {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) { shown = true }
+        }
+    }
+}
+
 /// 고정 휴식 시간대(예: 점심) 진입 시 잠깐 뜨는 안내 토스트.
 struct ScheduledRestToastView: View {
     let title: String
