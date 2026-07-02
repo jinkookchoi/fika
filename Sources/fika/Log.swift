@@ -29,8 +29,14 @@ enum Log {
         queue.async { write("·", msg) }
     }
 
+    private static var writeCount = 0
+
     /// 실제 파일 기록. (queue 안에서, 또는 크래시 핸들러에서 동기로 호출)
     private static func write(_ tag: String, _ msg: String) {
+        // 메뉴바 앱은 몇 주씩 안 꺼진다 → 시작 시 1회 회전만으론 부족. 주기적으로 크기를 확인한다(C-2).
+        // rotateIfNeeded는 상한 초과 시에만 실제로 회전하므로 비용은 stat 한 번 수준.
+        writeCount += 1
+        if writeCount % 200 == 0 { rotateIfNeeded() }
         let line = "\(fmt.string(from: Date())) \(tag) \(msg)\n"
         NSLog("[Fika] %@", msg)
         guard let data = line.data(using: .utf8) else { return }
