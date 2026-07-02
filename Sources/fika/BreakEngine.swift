@@ -461,6 +461,7 @@ final class BreakEngine: ObservableObject {
             } else {
                 phaseEnd = phaseEnd.addingTimeInterval(gap)
                 remaining = max(0, phaseEnd.timeIntervalSinceNow)
+                nextMicroBreak = nextMicroBreak.addingTimeInterval(gap)   // A-6: 작업 진행과 함께 밀어 복귀 즉시 발화 방지
                 Log.event("긴 공백 \(Int(gap))s → 남은 시간 보존")
             }
         case .scheduledRest, .paused:
@@ -545,7 +546,7 @@ final class BreakEngine: ObservableObject {
             phase = phaseBeforePause
             phaseEnd = Date().addingTimeInterval(pausedRemaining)
             remaining = pausedRemaining
-        } else {
+            nextMicroBreak = Date().addingTimeInterval(settings.microBreakMinutes * 60)  // A-6: 재개 기준으로 다시 잡음(즉시 발화 방지)
             phaseBeforePause = phase
             pausedRemaining = remaining
             phase = .paused
