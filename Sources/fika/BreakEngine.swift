@@ -178,6 +178,9 @@ final class BreakEngine: ObservableObject {
         let gap = now.timeIntervalSince(lastTick)
         lastTick = now
         if gap > 10, phase != .paused { handleLongGap(gap) }   // sleep 등 긴 공백을 tick 간격으로 감지·보정
+        // 하루 마무리 알림은 시각 기반이라 상태머신과 독립 — 일시정지·고정 휴식 중에도 판정한다(A-5).
+        // (아래 paused 가드나 handleScheduledRest return에 걸리면 그날 마무리 알림을 통째로 놓쳤음)
+        handleShutdown()
         guard phase != .paused else { return }
         if handleScheduledRest() { return }   // 고정 휴식 시간대면 평소 로직을 건너뛴다
         if settings.idleResetEnabled {
@@ -201,7 +204,6 @@ final class BreakEngine: ObservableObject {
         handleMicroBreak()
         handleTimeNotice()
         handleFinalTimeNotice()
-        handleShutdown()
         handleScheduledRestPrealert()
         refreshPresentation()
     }
