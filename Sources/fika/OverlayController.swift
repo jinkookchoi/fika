@@ -77,7 +77,7 @@ final class OverlayController {
 
     func showWarning() {
         if warningWindow != nil { return }
-        guard let screen = NSScreen.main else { return }
+        guard let screen = activeScreen else { return }
         let w: CGFloat = 320, h: CGFloat = 72
         let f = screen.visibleFrame
         let rect = NSRect(x: f.midX - w / 2, y: f.maxY - h - 16, width: w, height: h)
@@ -96,7 +96,7 @@ final class OverlayController {
 
     func showStartToast() {
         hideStartToast()
-        guard let screen = NSScreen.main else { return }
+        guard let screen = activeScreen else { return }
         let w: CGFloat = 520, h: CGFloat = 140   // 토스트 + 글로우 여백
         let f = screen.visibleFrame
         let rect = NSRect(x: f.midX - w / 2, y: f.maxY - h - 16, width: w, height: h)
@@ -124,7 +124,7 @@ final class OverlayController {
     /// 작업 중 마이크로 브레이크 동작 알림. (클릭 통과, 잠깐 떴다 사라짐)
     func showStretchToast(_ text: String) {
         hideStartToast()
-        guard let screen = NSScreen.main else { return }
+        guard let screen = activeScreen else { return }
         let w: CGFloat = 520, h: CGFloat = 140   // 토스트(최대 440) + 글로우 여백
         let f = screen.visibleFrame
         let rect = NSRect(x: f.midX - w / 2, y: f.maxY - h - 16, width: w, height: h)
@@ -143,7 +143,7 @@ final class OverlayController {
     /// 하루 마무리 알림 토스트. `stop`이면 "오늘은 그만(일시정지)" 버튼 포함 + 더 오래 떠 있음.
     func showShutdownToast(title: String, subtitle: String, stop: Bool) {
         hideStartToast()
-        guard let screen = NSScreen.main else { return }
+        guard let screen = activeScreen else { return }
         let w: CGFloat = 520, h: CGFloat = 150
         let f = screen.visibleFrame
         let rect = NSRect(x: f.midX - w / 2, y: f.maxY - h - 16, width: w, height: h)
@@ -162,7 +162,7 @@ final class OverlayController {
     /// 고정 휴식 시간대 진입/사전 예고 토스트.
     func showScheduledRestToast(title: String, subtitle: String) {
         hideStartToast()
-        guard let screen = NSScreen.main else { return }
+        guard let screen = activeScreen else { return }
         let w: CGFloat = 520, h: CGFloat = 140
         let f = screen.visibleFrame
         let rect = NSRect(x: f.midX - w / 2, y: f.maxY - h - 16, width: w, height: h)
@@ -179,7 +179,7 @@ final class OverlayController {
     /// 작업 중 주기적 "휴식까지 N분 남았어요" 알림. 동작 알림과 같은 슬롯을 쓴다(겹침 방지).
     func showTimeNotice(final: Bool = false) {
         hideStartToast()
-        guard let screen = NSScreen.main else { return }
+        guard let screen = activeScreen else { return }
         let w: CGFloat = 520, h: CGFloat = 140   // 토스트 + 글로우 여백
         let f = screen.visibleFrame
         let rect = NSRect(x: f.midX - w / 2, y: f.maxY - h - 16, width: w, height: h)
@@ -224,6 +224,14 @@ final class OverlayController {
         host.sizingOptions = []
         host.autoresizingMask = [.width, .height]
         window.contentView = host
+    }
+
+    /// 토스트·예고 배너를 띄울 화면. 메뉴바 전용(accessory) 앱은 키 윈도우가 없어
+    /// `NSScreen.main`이 사실상 내장 디스플레이로 고정된다 → 외장 모니터에서 일하면 알림을 못 본다.
+    /// 그래서 **마우스 커서가 있는 화면**("지금 보고 있는" 화면)에 띄운다. 없으면 주 화면 폴백.
+    private var activeScreen: NSScreen? {
+        let mouse = NSEvent.mouseLocation
+        return NSScreen.screens.first { $0.frame.contains(mouse) } ?? NSScreen.main
     }
 
     private func makeWindow(frame: NSRect, level: NSWindow.Level, passThrough: Bool) -> NSWindow {
