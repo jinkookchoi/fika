@@ -547,6 +547,7 @@ final class BreakEngine: ObservableObject {
             phaseEnd = Date().addingTimeInterval(pausedRemaining)
             remaining = pausedRemaining
             nextMicroBreak = Date().addingTimeInterval(settings.microBreakMinutes * 60)  // A-6: 재개 기준으로 다시 잡음(즉시 발화 방지)
+        } else {
             phaseBeforePause = phase
             pausedRemaining = remaining
             phase = .paused
