@@ -104,6 +104,7 @@ final class OverlayController {
         setHosted(win, StartToastView(engine: engine, onClose: { [weak self] in self?.hideStartToast() }))
         win.orderFront(nil)
         toastWindow = win
+        NotificationLog.shared.record("시작", "이제 시작해볼까요?")
         Log.debug("작업 시작 토스트 표시")
         toastTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: false) { [weak self] _ in
             Task { @MainActor in self?.hideStartToast() }
@@ -132,6 +133,7 @@ final class OverlayController {
         setHosted(win, StretchToastView(text: text, onClose: { [weak self] in self?.hideStartToast() }))
         win.orderFront(nil)
         toastWindow = win
+        NotificationLog.shared.record("동작", text)
         toastTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: false) { [weak self] _ in
             Task { @MainActor in self?.hideStartToast() }
         }
@@ -154,6 +156,7 @@ final class OverlayController {
             onClose: { [weak self] in self?.hideStartToast() }))
         win.orderFront(nil)
         toastWindow = win
+        NotificationLog.shared.record("마무리", title)
         toastTimer = Timer.scheduledTimer(withTimeInterval: stop ? 12 : 6, repeats: false) { [weak self] _ in
             Task { @MainActor in self?.hideStartToast() }
         }
@@ -171,6 +174,7 @@ final class OverlayController {
                                               onClose: { [weak self] in self?.hideStartToast() }))
         win.orderFront(nil)
         toastWindow = win
+        NotificationLog.shared.record("고정휴식", title)
         toastTimer = Timer.scheduledTimer(withTimeInterval: 6, repeats: false) { [weak self] _ in
             Task { @MainActor in self?.hideStartToast() }
         }
@@ -187,6 +191,7 @@ final class OverlayController {
         setHosted(win, TimeNoticeToastView(engine: engine, isFinal: final, onClose: { [weak self] in self?.hideStartToast() }))
         win.orderFront(nil)
         toastWindow = win
+        NotificationLog.shared.record("남은시간", final ? "곧 휴식이에요" : "휴식까지 \(engine.remainingMinutesRounded)분 남았어요")
         toastTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: false) { [weak self] _ in
             Task { @MainActor in self?.hideStartToast() }
         }

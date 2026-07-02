@@ -169,9 +169,7 @@ struct TimeNoticeToastView: View {
     let onClose: () -> Void
     @State private var shown = false
 
-    /// 분 단위 반올림(1분 미만도 "1분"으로). 올림이면 9:29에도 "10분"으로 부풀려져 시계와 어긋난다.
-    /// 반올림이면 정시(≈9:59) 발화는 "10분", 늦게(9:29) 뜨면 "9분"으로 실제와 맞는다.
-    private var minutesLeft: Int { max(1, Int((engine.remaining / 60).rounded())) }
+    private var minutesLeft: Int { engine.remainingMinutesRounded }
 
     var body: some View {
         HStack(spacing: 11) {

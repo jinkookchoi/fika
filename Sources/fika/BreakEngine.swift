@@ -110,6 +110,9 @@ final class BreakEngine: ObservableObject {
 
     var timeString: String { Self.mmss(remaining) }
 
+    /// 토스트 표시용: 남은 시간을 분으로 반올림(최소 1분). (올림이면 9:29에도 "10분"으로 부풀어 시계와 어긋남)
+    var remainingMinutesRounded: Int { max(1, Int((remaining / 60).rounded())) }
+
     /// 현재 상태에 맞는 마스코트 컷 이름 (cuts/<name>.png).
     var mascotCut: String {
         if phase == .breakHold { return "done" }

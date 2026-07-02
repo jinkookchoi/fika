@@ -320,6 +320,7 @@ private let iconLegend: [(label: String, emoji: String, symbol: String)] = [
 private struct AlertsTab: View {
     @ObservedObject var engine: BreakEngine
     @ObservedObject var settings: AppSettings
+    @ObservedObject private var notifLog = NotificationLog.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -401,7 +402,42 @@ private struct AlertsTab: View {
                 Label("사운드 테스트", systemImage: "speaker.wave.2.fill")
             }
             .buttonStyle(PanelButtonStyle())
+
+            Divider()
+            sectionHeader("알림 이력")
+            Text("최근 뜬 알림 20건. \"안 온 건지 놓친 건지\" 여기서 확인해요.")
+                .font(.caption).foregroundStyle(.secondary)
+            if notifLog.entries.isEmpty {
+                Text("아직 없어요. 위 테스트 버튼으로 띄워보세요.")
+                    .font(.caption).foregroundStyle(.tertiary)
+            } else {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(notifLog.entries) { e in
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Text(Self.hm(e.date))
+                                .font(.caption2.monospacedDigit()).foregroundStyle(.secondary)
+                                .frame(width: 40, alignment: .leading)
+                            Text(e.kind)
+                                .font(.caption2.weight(.semibold))
+                                .padding(.horizontal, 5).padding(.vertical, 1)
+                                .background(RoundedRectangle(cornerRadius: 4).fill(.primary.opacity(0.08)))
+                            Text(e.text)
+                                .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                            Spacer(minLength: 0)
+                        }
+                    }
+                }
+                .padding(8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(RoundedRectangle(cornerRadius: 8).fill(.primary.opacity(0.05)))
+            }
         }
+    }
+
+    /// 이력 표시용 HH:mm.
+    private static func hm(_ d: Date) -> String {
+        let c = Calendar.current.dateComponents([.hour, .minute], from: d)
+        return String(format: "%02d:%02d", c.hour ?? 0, c.minute ?? 0)
     }
 
     /// Int(자정 기준 분) ↔ DatePicker(Date) 브리지.
