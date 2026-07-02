@@ -63,7 +63,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 : (engine.phase == .working && engine.isWarning) ? .warning
                 : .work
             let frozen = engine.phase == .paused || engine.isAway || engine.phase == .scheduledRest
-            button.image = frozen ? CoffeeAnimation.still(clip) : CoffeeAnimation.next(clip)
+            if let frame = frozen ? CoffeeAnimation.still(clip) : CoffeeAnimation.next(clip) {
+                button.image = frame
+            } else {
+                // 영상 프레임이 없으면 절차적 커피잔으로 폴백(안 하면 아이콘이 투명해짐). steamPhase가 여기서 쓰인다.
+                button.image = CoffeeIcon.image(level: engine.coffeeLevel, steamPhase: steamPhase,
+                                                away: engine.isAway, paused: engine.phase == .paused,
+                                                warning: engine.isWarning ? engine.warningIntensity : 0)
+            }
             button.imagePosition = showTime ? .imageLeading : .imageOnly
             button.title = showTime ? " \(engine.menuTimeString)" : ""
         case .emoji:
