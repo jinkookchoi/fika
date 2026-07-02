@@ -53,6 +53,9 @@ final class BreakEngine: ObservableObject {
     private var timeNoticeBucket: Int = 0
     /// 카운트다운을 닫는 마지막 "곧 휴식" 알림을 이번 작업 세션에 이미 띄웠는지.
     private var timeNoticeFinalFired = false
+    /// 이번 작업 세션에서 실제로 집중한 시간(초). 자리비움·일시정지·sleep 제외.
+    /// enterBreak에서 이 값(계획 길이가 아니라 실제 집중분)을 기록하고 리셋한다(B-1·B-2).
+    private var workedSeconds: TimeInterval = 0
     /// 하루 마무리 알림: 오늘 이미 쏜 단계(30/15/0)와 그 날짜키 (자정에 리셋)
     private var shutdownFiredStages: Set<Int> = []
     private var shutdownFiredDay = -1
@@ -197,6 +200,7 @@ final class BreakEngine: ObservableObject {
             return
         }
         remaining = max(0, phaseEnd.timeIntervalSinceNow)
+        if phase == .working && !isAway { workedSeconds += 1 }   // 실제 집중 시간 누적(자리비움 제외)
         if remaining <= 0 {
             switch phase {
             case .working:  enterBreak()
@@ -488,6 +492,7 @@ final class BreakEngine: ObservableObject {
     private func startWork() {
         phase = .working
         isLongBreak = false
+        workedSeconds = 0
         setRemaining(settings.workMinutes * 60)
         nextMicroBreak = Date().addingTimeInterval(settings.microBreakMinutes * 60)
         resetTimeNoticeBucket(forRemaining: settings.workMinutes * 60)
@@ -502,8 +507,14 @@ final class BreakEngine: ObservableObject {
     }
 
     private func enterBreak() {
-        SessionStore.shared.record(minutes: phaseDuration / 60, at: Date())  // 직전 작업 세션 (phase 바뀌기 전)
-        completedWork += 1
+        // 계획 길이(phaseDuration)가 아니라 이번 세션 실제 집중분을 기록한다(B-1·B-2).
+        // 60초 미만(수동 "지금 휴식"·시작 직후 등)은 가짜 세션이므로 기록·카운트 제외.
+        let focus = workedSeconds
+        workedSeconds = 0
+        if focus >= 60 {
+            SessionStore.shared.record(minutes: focus / 60, at: Date())
+            completedWork += 1
+        }
         isLongBreak = settings.longBreakEnabled
             && settings.cyclesBeforeLongBreak > 0
             && completedWork % settings.cyclesBeforeLongBreak == 0
@@ -511,7 +522,7 @@ final class BreakEngine: ObservableObject {
         setRemaining((isLongBreak ? settings.longBreakMinutes : settings.breakMinutes) * 60)
         Sound.play(.breakStart, enabled: settings.soundEnabled)
         refreshPresentation()
-        Log.debug("휴식 진입 \(isLongBreak ? "긴" : "짧은") (완료 세션 \(completedWork))")
+        Log.debug("휴식 진입 \(isLongBreak ? "긴" : "짧은") (집중 \(Int(focus))s, 완료 세션 \(completedWork))")
     }
 
     private func endBreak() {
@@ -569,6 +580,7 @@ final class BreakEngine: ObservableObject {
     func restartWork() {
         guard phase == .working else { return }
         isAway = false
+        workedSeconds = 0                                   // 못 집중한 세션 버림 → 기록 안 함
         setRemaining(settings.workMinutes * 60)
         nextMicroBreak = Date().addingTimeInterval(settings.microBreakMinutes * 60)
         resetTimeNoticeBucket(forRemaining: settings.workMinutes * 60)
