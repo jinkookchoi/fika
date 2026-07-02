@@ -16,6 +16,7 @@
 ```bash
 ./build.sh              # swift build (release) → Fika.app 조립 + ad-hoc 서명
 swift build -c debug    # 컴파일만 빠르게 검증할 때
+swift run FikaTests     # 순수 로직 단위 테스트 (FikaCore, XCTest 미사용 — CLT 환경)
 ./package.sh            # 빌드 + 친구 공유용 Fika-<버전>.zip 생성
 open Fika.app           # 실행 (메뉴바 전용, Dock 아이콘 없음)
 pkill -f MacOS/Fika     # 종료

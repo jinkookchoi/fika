@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import FikaCore
 
 enum Phase: CustomStringConvertible {
     case working       // 작업 중
@@ -260,9 +261,7 @@ final class BreakEngine: ObservableObject {
             shutdownFiredStages = []
         }
         let m = AppSettings.minutesOfDay(now)
-        for offset in [30, 15, 0] {
-            let target = settings.shutdownTime - offset
-            guard target >= 0, !shutdownFiredStages.contains(offset), m >= target, m < target + 2 else { continue }
+        for offset in ScheduleMath.dueShutdownStages(nowMinutes: m, shutdownTime: settings.shutdownTime, fired: shutdownFiredStages) {
             shutdownFiredStages.insert(offset)
             fireShutdownStage(offset)
             Log.event("하루 마무리 알림 (\(offset == 0 ? "도래" : "\(offset)분 전"))")
@@ -405,11 +404,7 @@ final class BreakEngine: ObservableObject {
     /// 가장 큰 주기 배수(단, 남은 시간보다 작은)부터 시작 → 정확히 배수면 한 칸 내려 즉시 발화를 막는다.
     private func resetTimeNoticeBucket(forRemaining seconds: Double) {
         timeNoticeFinalFired = false                                           // 새 작업 세션 → 마지막 알림도 리셋
-        let period = settings.timeNoticeMinutes * 60
-        guard period > 0 else { timeNoticeBucket = 0; return }
-        var k = Int((seconds / period).rounded(.down))
-        if Double(k) * period >= seconds { k -= 1 }                            // 경계면 한 칸 내려 즉시 발화 방지
-        timeNoticeBucket = max(0, k)
+        timeNoticeBucket = ScheduleMath.timeNoticeBucket(remaining: seconds, period: settings.timeNoticeMinutes * 60)
     }
 
     /// 휴식이 끝났지만 사용자가 아직 안 돌아온 상태.

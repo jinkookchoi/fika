@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import FikaCore
 
 /// 메뉴바 아이콘 테마.
 enum IconTheme: String, CaseIterable, Identifiable {
@@ -176,10 +177,9 @@ final class AppSettings: ObservableObject {
     }
     /// 지금이 고정 휴식 시간대 안인지.
     func isWithinScheduledRest(_ date: Date) -> Bool {
-        guard scheduledRestEnabled, scheduledRestStart != scheduledRestEnd else { return false }
-        let m = Self.minutesOfDay(date)
-        if scheduledRestStart < scheduledRestEnd { return m >= scheduledRestStart && m < scheduledRestEnd }
-        return m >= scheduledRestStart || m < scheduledRestEnd   // 자정 넘김
+        guard scheduledRestEnabled else { return false }
+        return ScheduleMath.isWithinRest(nowMinutes: Self.minutesOfDay(date),
+                                         start: scheduledRestStart, end: scheduledRestEnd)
     }
     /// 시간대 전체 길이(초). 진행 링용.
     var scheduledRestDurationSeconds: TimeInterval {
