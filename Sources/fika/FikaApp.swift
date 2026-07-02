@@ -8,6 +8,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private let popover = NSPopover()
     private var titleTimer: Timer?
+    private var titleInterval: TimeInterval = 0
+    /// App Nap 방지 활동 토큰 (살아 있는 동안 App Nap이 억제됨)
+    private var activityToken: NSObjectProtocol?
     /// 김 애니메이션 위상 (커피 테마용)
     private var steamPhase: Double = 0
 
@@ -45,10 +48,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panelHost.sizingOptions = []
         popover.contentViewController = panelHost
 
-        // 메뉴바 갱신 (커피 애니메이션 프레임 재생 ~10fps)
-        titleTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+        // App Nap 방지 — 안 하면 타이머가 지연·병합돼 알림이 늦거나 멈출 수 있다(A-8).
+        // 시스템 idle sleep은 허용(우리는 tick gap 보정으로 처리).
+        activityToken = ProcessInfo.processInfo.beginActivity(
+            options: [.userInitiatedAllowingIdleSystemSleep], reason: "Fika 작업/휴식 타이머")
+
+        // 메뉴바 갱신 — 커피 프레임 재생 중엔 ~10Hz, 그 외(이모지·심볼·정지 프레임)엔 1Hz로 낮춤(C-3).
+        scheduleTitleTimer(interval: 0.1)
+    }
+
+    /// 메뉴바 갱신 타이머를 주어진 주기로 (재)설정한다. 주기가 그대로면 무시(불필요한 재생성 방지).
+    private func scheduleTitleTimer(interval: TimeInterval) {
+        guard interval != titleInterval else { return }
+        titleTimer?.invalidate()
+        let t = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.updateButton() }
         }
+        t.tolerance = interval * 0.2
+        RunLoop.main.add(t, forMode: .common)
+        titleTimer = t
+        titleInterval = interval
     }
 
     private func updateButton() {
@@ -81,6 +100,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             button.imagePosition = showTime ? .imageLeading : .imageOnly
             button.title = showTime ? " \(engine.menuTimeString)" : ""
         }
+        // 커피 프레임이 실제로 재생 중일 때만 10Hz, 그 외엔 1Hz(시간 표시는 1초 단위면 충분).
+        let animating = engine.settings.iconTheme == .coffee
+            && CoffeeAnimation.hasFrames
+            && !(engine.phase == .paused || engine.isAway || engine.phase == .scheduledRest)
+        scheduleTitleTimer(interval: animating ? 0.1 : 1.0)
     }
 
     @objc private func togglePopover(_ sender: Any?) {

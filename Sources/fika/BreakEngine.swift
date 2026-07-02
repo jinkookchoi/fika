@@ -81,6 +81,7 @@ final class BreakEngine: ObservableObject {
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.tick() }
         }
+        timer?.tolerance = 0.2   // A-8: 에너지 절약(정확도는 wall-clock으로 보정하므로 무해)
     }
 
     // MARK: - 파생 상태
