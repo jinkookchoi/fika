@@ -639,4 +639,15 @@ final class BreakEngine: ObservableObject {
         }
         refreshPresentation()
     }
+
+    // MARK: - 알림 테스트 (설정 패널에서 즉석 확인용 — 멀티 모니터에서 "어느 화면에 뜨는지"도 확인)
+
+    func testStretchAlert() {
+        let tip = settings.stretchTips.filter { !$0.isEmpty }.randomElement() ?? "발목을 위아래로 까딱까딱 (혈액순환!)"
+        overlay.showStretchToast(tip)
+    }
+    func testTimeNoticeAlert() { overlay.showTimeNotice() }
+    func testShutdownAlert() {
+        overlay.showShutdownToast(title: "오늘 일은 여기까지예요 ☕", subtitle: "테스트 알림이에요", stop: false)
+    }
 }

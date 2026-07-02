@@ -132,7 +132,7 @@ struct PanelView: View {
         switch tab {
         case .home:     HomeTab(engine: engine)
         case .time:     TimeTab(settings: engine.settings)
-        case .alerts:   AlertsTab(settings: engine.settings)
+        case .alerts:   AlertsTab(engine: engine, settings: engine.settings)
         case .stretch:  StretchTab(settings: engine.settings)
         case .stats:    StatsTab()
         case .settings: SettingsTab(settings: engine.settings)
@@ -318,6 +318,7 @@ private let iconLegend: [(label: String, emoji: String, symbol: String)] = [
 ]
 
 private struct AlertsTab: View {
+    @ObservedObject var engine: BreakEngine
     @ObservedObject var settings: AppSettings
 
     var body: some View {
@@ -380,6 +381,17 @@ private struct AlertsTab: View {
             }
             .pickerStyle(.radioGroup).labelsHidden()
             Text(settings.breakStyle.detail).font(.caption).foregroundStyle(.secondary)
+
+            Divider()
+            sectionHeader("알림 테스트")
+            Text("지금(마우스가 있는 화면)에 각 알림을 띄워봐요. 멀티 모니터에서 어느 화면에 뜨는지 확인할 수 있어요.")
+                .font(.caption).foregroundStyle(.secondary)
+            HStack(spacing: 6) {
+                Button { engine.testStretchAlert() } label: { Text("동작") }
+                Button { engine.testTimeNoticeAlert() } label: { Text("남은시간") }
+                Button { engine.testShutdownAlert() } label: { Text("마무리") }
+            }
+            .buttonStyle(PanelButtonStyle())
 
             Divider()
             Toggle("전환 사운드 재생", isOn: $settings.soundEnabled)
