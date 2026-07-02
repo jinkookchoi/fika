@@ -177,14 +177,14 @@ final class OverlayController {
     }
 
     /// 작업 중 주기적 "휴식까지 N분 남았어요" 알림. 동작 알림과 같은 슬롯을 쓴다(겹침 방지).
-    func showTimeNotice() {
+    func showTimeNotice(final: Bool = false) {
         hideStartToast()
         guard let screen = NSScreen.main else { return }
         let w: CGFloat = 520, h: CGFloat = 140   // 토스트 + 글로우 여백
         let f = screen.visibleFrame
         let rect = NSRect(x: f.midX - w / 2, y: f.maxY - h - 16, width: w, height: h)
         let win = makeWindow(frame: rect, level: .statusBar, passThrough: false)
-        setHosted(win, TimeNoticeToastView(engine: engine, onClose: { [weak self] in self?.hideStartToast() }))
+        setHosted(win, TimeNoticeToastView(engine: engine, isFinal: final, onClose: { [weak self] in self?.hideStartToast() }))
         win.orderFront(nil)
         toastWindow = win
         toastTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: false) { [weak self] _ in

@@ -44,8 +44,12 @@ final class BreakEngine: ObservableObject {
     private var sleepAt: Date?
     /// 다음 마이크로 브레이크(작업 중 동작 알림) 예정 시각
     private var nextMicroBreak: Date = .distantFuture
-    /// 다음 "남은 시간 알림" 토스트 예정 시각
-    private var nextTimeNotice: Date = .distantFuture
+    /// 다음에 띄울 "남은 시간 알림"의 목표 단계.
+    /// 휴식까지 남은 시간이 `timeNoticeBucket × 주기(분)`에 도달하면 발화하고 한 단계 내린다(0이면 끝).
+    /// 작업 시작이 아니라 "휴식까지 남은 시간" 기준이라, idle/sleep로 phaseEnd가 밀려도 정렬이 유지된다.
+    private var timeNoticeBucket: Int = 0
+    /// 카운트다운을 닫는 마지막 "곧 휴식" 알림을 이번 작업 세션에 이미 띄웠는지.
+    private var timeNoticeFinalFired = false
     /// 하루 마무리 알림: 오늘 이미 쏜 단계(30/15/0)와 그 날짜키 (자정에 리셋)
     private var shutdownFiredStages: Set<Int> = []
     private var shutdownFiredDay = -1
@@ -191,6 +195,7 @@ final class BreakEngine: ObservableObject {
         }
         handleMicroBreak()
         handleTimeNotice()
+        handleFinalTimeNotice()
         handleShutdown()
         handleScheduledRestPrealert()
         refreshPresentation()
@@ -328,16 +333,42 @@ final class BreakEngine: ObservableObject {
 
     /// 작업 중 주기적으로 "휴식까지 N분 남았어요" 토스트를 띄운다.
     /// 메뉴바 시간 표시와 무관한 별도 토글. 동작 알림 토스트가 떠 있으면 겹치지 않게 양보한다.
+    /// 발화 시점을 "휴식까지 남은 시간"의 주기 배수(…,15,10,5분)에 정렬해, 마지막 알림이
+    /// 휴식 직전에 깔끔하게 떨어지게 한다(작업 시작 기준이면 작업 시간에 따라 어긋났음).
     private func handleTimeNotice() {
         guard settings.timeNoticeEnabled, phase == .working, !isAway, !isWarning else { return }
-        guard Date() >= nextTimeNotice else { return }
-        if overlay.isToastVisible {                                  // 동작 알림 등과 겹침 방지
-            nextTimeNotice = Date().addingTimeInterval(20)           // 잠깐 미뤘다 다시 시도
-            return
-        }
+        let period = settings.timeNoticeMinutes * 60
+        guard period > 0, timeNoticeBucket >= 1 else { return }
+        guard remaining <= Double(timeNoticeBucket) * period else { return }   // 다음 정렬 지점 도달 전
+        if overlay.isToastVisible { return }                                   // 겹침 방지: 양보(버킷 유지, 다음 틱 재시도)
         overlay.showTimeNotice()
-        nextTimeNotice = Date().addingTimeInterval(settings.timeNoticeMinutes * 60)
-        Log.debug("남은 시간 알림: \(menuTimeString)")
+        // 다음 목표로 한 단계. 슬립 복귀 등으로 여러 경계를 건너뛰었으면 따라잡되 토스트는 한 번만.
+        var k = timeNoticeBucket - 1
+        while k >= 1, remaining <= Double(k) * period { k -= 1 }
+        timeNoticeBucket = max(0, k)
+        Log.debug("남은 시간 알림: \(menuTimeString) (다음 \(timeNoticeBucket)단계)")
+    }
+
+    /// 카운트다운을 닫는 마지막 알림. 휴식 직전(예고 구간 안이라도) 한 번 "곧 휴식이에요".
+    /// 주기 최소가 5분이라 정렬 알림은 …10,5분에서 끝난다 → 마지막 "0분"에 해당하는 알림을 여기서 채운다.
+    private func handleFinalTimeNotice() {
+        guard settings.timeNoticeEnabled, phase == .working, !isAway else { return }
+        guard !timeNoticeFinalFired, remaining > 0, remaining <= 30 else { return }   // 휴식 30초 전 한 번
+        if overlay.isToastVisible { return }                                          // 겹침 방지: 다음 틱 재시도
+        overlay.showTimeNotice(final: true)
+        timeNoticeFinalFired = true
+        Log.debug("남은 시간 알림: 곧 휴식(마지막)")
+    }
+
+    /// "남은 시간 알림"의 목표 단계를 남은 시간 기준으로 다시 잡는다.
+    /// 가장 큰 주기 배수(단, 남은 시간보다 작은)부터 시작 → 정확히 배수면 한 칸 내려 즉시 발화를 막는다.
+    private func resetTimeNoticeBucket(forRemaining seconds: Double) {
+        timeNoticeFinalFired = false                                           // 새 작업 세션 → 마지막 알림도 리셋
+        let period = settings.timeNoticeMinutes * 60
+        guard period > 0 else { timeNoticeBucket = 0; return }
+        var k = Int((seconds / period).rounded(.down))
+        if Double(k) * period >= seconds { k -= 1 }                            // 경계면 한 칸 내려 즉시 발화 방지
+        timeNoticeBucket = max(0, k)
     }
 
     /// 휴식이 끝났지만 사용자가 아직 안 돌아온 상태.
@@ -393,15 +424,26 @@ final class BreakEngine: ObservableObject {
         Log.event("시스템 sleep (phase=\(phase), 남은 \(Int(remaining))s)")
     }
 
-    /// 복귀 시 잔 시간만큼 보정한다.
-    /// - 휴식 시간 이상 잤으면: 이미 충분히 쉰 셈 → 작업 사이클 리셋 (`idleResetEnabled` 한정)
-    /// - 그보다 짧으면: 잔 시간을 작업으로 치지 않고 남은 시간을 동결해 보존
-    ///   (보정이 없으면 wall-clock phaseEnd가 과거가 돼 깨자마자 휴식으로 떨어진다)
+    /// 복귀 시 phase에 맞게 보정한다.
+    /// - 휴식(휴식/복귀대기): 자리를 뜨는 시간이므로 **실제 시간이 흘러야** 한다 → phaseEnd 그대로 두고
+    ///   남은 시간만 다시 계산. 자는 동안 휴식이 지나가고, 다 지났으면 다음 틱에 휴식이 끝난다.
+    ///   (자는 동안에도 시간이 안 가면 "쉬고 왔는데 아직 남았다"가 됨 — 크리티컬 버그였음)
+    /// - 작업: 잔 시간을 작업으로 치지 않는다. 휴식 시간 이상 잤으면 충분히 쉰 셈이라 작업 사이클 리셋
+    ///   (`idleResetEnabled` 한정), 그보다 짧으면 잔 시간만큼 phaseEnd를 밀어 남은 시간을 보존한다
+    ///   (보정이 없으면 wall-clock phaseEnd가 과거가 돼 깨자마자 휴식으로 떨어진다).
     private func handleDidWake() {
         defer { startTimer() }
         guard let sleptFrom = sleepAt, phase != .paused else { return }
         sleepAt = nil
         let slept = Date().timeIntervalSince(sleptFrom)
+
+        if phase == .breaking || phase == .breakHold {
+            remaining = max(0, phaseEnd.timeIntervalSinceNow)   // 실제 시간 반영(자는 동안 휴식 진행)
+            Log.event("시스템 wake — \(Int(slept))s 잠 (휴식) → 실제 시간 반영, 남은 \(Int(remaining))s")
+            refreshPresentation()
+            return
+        }
+
         if settings.idleResetEnabled && slept >= settings.breakMinutes * 60 {
             isAway = false
             startWork()
@@ -434,7 +476,7 @@ final class BreakEngine: ObservableObject {
         isLongBreak = false
         setRemaining(settings.workMinutes * 60)
         nextMicroBreak = Date().addingTimeInterval(settings.microBreakMinutes * 60)
-        nextTimeNotice = Date().addingTimeInterval(settings.timeNoticeMinutes * 60)
+        resetTimeNoticeBucket(forRemaining: settings.workMinutes * 60)
         Log.debug("작업 시작 \(Int(settings.workMinutes))분")
     }
 
@@ -503,6 +545,7 @@ final class BreakEngine: ObservableObject {
         guard phase == .working else { return }
         isAway = false
         setRemaining(minutes * 60)
+        resetTimeNoticeBucket(forRemaining: minutes * 60)   // 바뀐 남은 시간에 알림 단계도 재정렬
         refreshPresentation()
     }
 
@@ -512,7 +555,7 @@ final class BreakEngine: ObservableObject {
         isAway = false
         setRemaining(settings.workMinutes * 60)
         nextMicroBreak = Date().addingTimeInterval(settings.microBreakMinutes * 60)
-        nextTimeNotice = Date().addingTimeInterval(settings.timeNoticeMinutes * 60)
+        resetTimeNoticeBucket(forRemaining: settings.workMinutes * 60)
         refreshPresentation()
         Log.debug("작업 다시 시작 (수동)")
     }

@@ -164,11 +164,14 @@ struct StretchToastView: View {
 /// (메뉴바 시간 표시와 무관한 별도 기능. 동작 알림과 같은 카드 스타일.)
 struct TimeNoticeToastView: View {
     @ObservedObject var engine: BreakEngine
+    /// 카운트다운을 닫는 마지막 알림이면 숫자 대신 "곧 휴식"으로.
+    var isFinal: Bool = false
     let onClose: () -> Void
     @State private var shown = false
 
-    /// 분 단위로 올림(1분 미만도 "1분"으로). 보일 때 한 번 스냅샷이면 충분.
-    private var minutesLeft: Int { max(1, Int((engine.remaining / 60).rounded(.up))) }
+    /// 분 단위 반올림(1분 미만도 "1분"으로). 올림이면 9:29에도 "10분"으로 부풀려져 시계와 어긋난다.
+    /// 반올림이면 정시(≈9:59) 발화는 "10분", 늦게(9:29) 뜨면 "9분"으로 실제와 맞는다.
+    private var minutesLeft: Int { max(1, Int((engine.remaining / 60).rounded())) }
 
     var body: some View {
         HStack(spacing: 11) {
@@ -178,9 +181,9 @@ struct TimeNoticeToastView: View {
                 Text("☕").font(.title2)
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text("아직 집중 중이에요")
+                Text(isFinal ? "곧 휴식이에요" : "아직 집중 중이에요")
                     .font(.caption).foregroundStyle(Color(red: 0.55, green: 0.40, blue: 0.25))
-                Text("휴식까지 \(minutesLeft)분 남았어요")
+                Text(isFinal ? "잠깐 정리하고 일어날 준비해요" : "휴식까지 \(minutesLeft)분 남았어요")
                     .font(.callout.weight(.semibold))
                     .foregroundStyle(Color(red: 0.24, green: 0.15, blue: 0.08))
             }
