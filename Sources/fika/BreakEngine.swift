@@ -40,8 +40,9 @@ final class BreakEngine: ObservableObject {
     private var pausedRemaining: TimeInterval = 0
     private var phaseBeforePause: Phase = .working
     private var timer: Timer?
-    /// 시스템 sleep 진입 시각 (wake 때 얼마나 잤는지 계산용)
-    private var sleepAt: Date?
+    /// 직전 tick 시각. 이번 tick과의 간격이 크면(주로 시스템 sleep) 시간 보정을 한다(handleLongGap).
+    /// 타이머를 죽이지 않고 이 gap만으로 sleep을 감지하므로 wake 알림 유실에 강하다.
+    private var lastTick = Date()
     /// 다음 마이크로 브레이크(작업 중 동작 알림) 예정 시각
     private var nextMicroBreak: Date = .distantFuture
     /// 다음에 띄울 "남은 시간 알림"의 목표 단계.
@@ -173,6 +174,10 @@ final class BreakEngine: ObservableObject {
     // MARK: - 틱
 
     private func tick() {
+        let now = Date()
+        let gap = now.timeIntervalSince(lastTick)
+        lastTick = now
+        if gap > 10, phase != .paused { handleLongGap(gap) }   // sleep 등 긴 공백을 tick 간격으로 감지·보정
         guard phase != .paused else { return }
         if handleScheduledRest() { return }   // 고정 휴식 시간대면 평소 로직을 건너뛴다
         if settings.idleResetEnabled {
@@ -404,54 +409,45 @@ final class BreakEngine: ObservableObject {
 
     // MARK: - Sleep / Wake
 
-    /// 노트북 닫힘(sleep)·복귀(wake)를 직접 받는다.
-    /// sleep 중에는 Timer가 멈춰 `handleIdle()`이 자리 비움을 인지하지 못하므로
-    /// 별도로 처리한다. (유휴 자리비움은 화면 켠 채만 커버)
+    /// 시스템 sleep/wake는 **로그로만** 남긴다(진단용). 시간 보정은 타이머를 죽이지 않고
+    /// tick()의 공백(gap) 감지로 처리한다(`handleLongGap`).
+    /// → wake 알림을 놓쳐도(dark wake·빠른 sleep/wake 반복·알림 유실) 타이머가 계속 살아 있어
+    ///   앱이 조용히 멈추지 않는다. (예전엔 willSleep에서 타이머를 죽여 wake를 놓치면 앱 전체가 침묵했다)
     private func observeSleepWake() {
         let nc = NSWorkspace.shared.notificationCenter
         nc.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor in self?.handleWillSleep() }
+            Task { @MainActor in
+                guard let self else { return }
+                Log.event("시스템 sleep (phase=\(self.phase), 남은 \(Int(self.remaining))s)")
+            }
         }
         nc.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor in self?.handleDidWake() }
+            Task { @MainActor in self?.tick() }   // 깨자마자 gap 보정을 앞당김(다음 tick을 기다리지 않음)
         }
     }
 
-    private func handleWillSleep() {
-        sleepAt = Date()
-        timer?.invalidate()  // wake 때 보정을 마친 뒤 직접 재시작한다
-        timer = nil
-        Log.event("시스템 sleep (phase=\(phase), 남은 \(Int(remaining))s)")
-    }
-
-    /// 복귀 시 phase에 맞게 보정한다.
-    /// - 휴식(휴식/복귀대기): 자리를 뜨는 시간이므로 **실제 시간이 흘러야** 한다 → phaseEnd 그대로 두고
-    ///   남은 시간만 다시 계산. 자는 동안 휴식이 지나가고, 다 지났으면 다음 틱에 휴식이 끝난다.
-    ///   (자는 동안에도 시간이 안 가면 "쉬고 왔는데 아직 남았다"가 됨 — 크리티컬 버그였음)
-    /// - 작업: 잔 시간을 작업으로 치지 않는다. 휴식 시간 이상 잤으면 충분히 쉰 셈이라 작업 사이클 리셋
-    ///   (`idleResetEnabled` 한정), 그보다 짧으면 잔 시간만큼 phaseEnd를 밀어 남은 시간을 보존한다
-    ///   (보정이 없으면 wall-clock phaseEnd가 과거가 돼 깨자마자 휴식으로 떨어진다).
-    private func handleDidWake() {
-        defer { startTimer() }
-        guard let sleptFrom = sleepAt, phase != .paused else { return }
-        sleepAt = nil
-        let slept = Date().timeIntervalSince(sleptFrom)
-
-        if phase == .breaking || phase == .breakHold {
-            remaining = max(0, phaseEnd.timeIntervalSinceNow)   // 실제 시간 반영(자는 동안 휴식 진행)
-            Log.event("시스템 wake — \(Int(slept))s 잠 (휴식) → 실제 시간 반영, 남은 \(Int(remaining))s")
-            refreshPresentation()
-            return
-        }
-
-        if settings.idleResetEnabled && slept >= settings.breakMinutes * 60 {
-            isAway = false
-            startWork()
-            Log.event("시스템 wake — \(Int(slept))s 잠 → 작업 리셋")
-        } else {
-            phaseEnd = phaseEnd.addingTimeInterval(slept)
+    /// tick 사이의 큰 공백(주로 시스템 sleep)을 보정한다. wake 알림이 아니라 "직전 tick과의 시간 차"로 판단.
+    /// - 휴식(휴식/복귀대기): 자리를 뜨는 시간이므로 실제 시간이 흘러야 한다 → phaseEnd 그대로, 남은 시간만 재계산.
+    /// - 작업: 잔 시간을 작업으로 치지 않는다. 휴식 시간 이상이면 충분히 쉰 셈이라 사이클 리셋(`idleResetEnabled`),
+    ///   그보다 짧으면 공백만큼 phaseEnd를 밀어 남은 시간을 보존(안 밀면 깨자마자 휴식으로 떨어짐).
+    /// - 고정 휴식: 절대 시각 기반이라 아무것도 안 해도 곧이어 `handleScheduledRest()`가 처리한다.
+    private func handleLongGap(_ gap: TimeInterval) {
+        switch phase {
+        case .breaking, .breakHold:
             remaining = max(0, phaseEnd.timeIntervalSinceNow)
-            Log.event("시스템 wake — \(Int(slept))s 잠 → 남은 시간 보존 (phase=\(phase))")
+            Log.event("긴 공백 \(Int(gap))s (휴식) → 실제 시간 반영, 남은 \(Int(remaining))s")
+        case .working:
+            if settings.idleResetEnabled && gap >= settings.breakMinutes * 60 {
+                isAway = false
+                startWork()
+                Log.event("긴 공백 \(Int(gap))s → 작업 리셋")
+            } else {
+                phaseEnd = phaseEnd.addingTimeInterval(gap)
+                remaining = max(0, phaseEnd.timeIntervalSinceNow)
+                Log.event("긴 공백 \(Int(gap))s → 남은 시간 보존")
+            }
+        case .scheduledRest, .paused:
+            break
         }
         refreshPresentation()
     }
