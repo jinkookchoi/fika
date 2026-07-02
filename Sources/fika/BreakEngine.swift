@@ -71,9 +71,18 @@ final class BreakEngine: ObservableObject {
     func hideMenuHoverTip() { overlay.hideHoverTip() }
 
     private init() {
+        settings.onScheduleChange = { [weak self] in self?.rescheduleAlerts() }   // A-7: 주기 설정 변경 → 재정렬
         startWork()
         startTimer()
         observeSleepWake()
+    }
+
+    /// 알림 주기 설정(남은시간/동작)이 세션 도중 바뀌면 현재 작업 세션의 스케줄을 새 값에 맞춰 재정렬한다(A-7).
+    /// (안 하면: 주기를 줄이면 남은 세션 동안 알림이 거의 안 오고, 늘리면 다음 틱에 즉시 1발.)
+    private func rescheduleAlerts() {
+        guard phase == .working else { return }
+        resetTimeNoticeBucket(forRemaining: remaining)
+        nextMicroBreak = Date().addingTimeInterval(settings.microBreakMinutes * 60)
     }
 
     private func startTimer() {

@@ -42,6 +42,10 @@ enum BreakStyle: String, CaseIterable, Identifiable {
 final class AppSettings: ObservableObject {
     private let d = UserDefaults.standard
 
+    /// 주기류 설정(알림 주기 등)이 바뀌면 엔진이 스케줄을 재정렬하도록 알리는 훅(A-7/§5-3).
+    /// 엔진이 init에서 구독한다. UserDefaults 저장과 별개.
+    var onScheduleChange: (() -> Void)?
+
     /// 앉아서 일하며 할 수 있는 기본 동작 문구. (사용자가 설정에서 편집 가능)
     static let defaultStretchTips = [
         "고개를 천천히 좌우로 기울여요 (각 5초)",
@@ -75,13 +79,13 @@ final class AppSettings: ObservableObject {
     /// 휴식·마이크로 알림에 보여줄 동작 문구 목록
     @Published var stretchTips: [String]          { didSet { d.set(stretchTips, forKey: "stretchTips") } }
     /// 작업 중 주기적으로 동작 알림(마이크로 브레이크)을 띄울지
-    @Published var microBreakEnabled: Bool        { didSet { d.set(microBreakEnabled, forKey: "microBreakEnabled") } }
+    @Published var microBreakEnabled: Bool        { didSet { d.set(microBreakEnabled, forKey: "microBreakEnabled"); onScheduleChange?() } }
     /// 마이크로 브레이크 주기(분)
-    @Published var microBreakMinutes: Double      { didSet { d.set(microBreakMinutes, forKey: "microBreakMinutes") } }
+    @Published var microBreakMinutes: Double      { didSet { d.set(microBreakMinutes, forKey: "microBreakMinutes"); onScheduleChange?() } }
     /// 작업 중 주기적으로 "남은 시간" 토스트를 띄울지 (메뉴바 시간 표시와 무관한 별도 토글)
-    @Published var timeNoticeEnabled: Bool        { didSet { d.set(timeNoticeEnabled, forKey: "timeNoticeEnabled") } }
+    @Published var timeNoticeEnabled: Bool        { didSet { d.set(timeNoticeEnabled, forKey: "timeNoticeEnabled"); onScheduleChange?() } }
     /// 남은 시간 알림 주기(분)
-    @Published var timeNoticeMinutes: Double      { didSet { d.set(timeNoticeMinutes, forKey: "timeNoticeMinutes") } }
+    @Published var timeNoticeMinutes: Double      { didSet { d.set(timeNoticeMinutes, forKey: "timeNoticeMinutes"); onScheduleChange?() } }
     /// 고정 휴식 시간대 사용 (예: 점심 11:30~13:00엔 무조건 쉼)
     @Published var scheduledRestEnabled: Bool     { didSet { d.set(scheduledRestEnabled, forKey: "scheduledRestEnabled") } }
     /// 시작/끝 (자정 기준 분). 기본 11:30~13:00
