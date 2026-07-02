@@ -47,6 +47,8 @@ final class BreakEngine: ObservableObject {
     private var lastTick = Date()
     /// 다음 마이크로 브레이크(작업 중 동작 알림) 예정 시각
     private var nextMicroBreak: Date = .distantFuture
+    /// 자리 비움이 시작된(입력이 끊긴) 시각. 복귀 시 비운 시간을 재서 휴식 인정 여부를 정한다(B-4).
+    private var awayStart = Date()
     /// 다음에 띄울 "남은 시간 알림"의 목표 단계.
     /// 휴식까지 남은 시간이 `timeNoticeBucket × 주기(분)`에 도달하면 발화하고 한 단계 내린다(0이면 끝).
     /// 작업 시작이 아니라 "휴식까지 남은 시간" 기준이라, idle/sleep로 phaseEnd가 밀려도 정렬이 유지된다.
@@ -408,8 +410,10 @@ final class BreakEngine: ObservableObject {
     }
 
     /// 자리 비움(유휴) 처리. 작업 중에만 동작한다.
-    /// - 임계값 이상 입력이 없으면 작업 카운트다운을 동결한다.
-    /// - 복귀하면 그만큼 쉬었다고 보고 작업 세션을 처음부터 리셋한다.
+    /// - 임계값(idleThreshold) 이상 입력이 없으면 자리 비움으로 보고 작업 카운트다운을 동결한다.
+    /// - 복귀 시: 비운 시간이 **휴식 시간(breakMinutes) 이상**이면 충분히 쉰 셈이라 사이클을 리셋하고,
+    ///   미만이면 동결만 풀고 남은 시간을 이어간다. (sleep 복귀와 같은 규칙 — 잠깐 자리 비운 걸로
+    ///   세션을 통째로 날리지 않는다. B-4)
     private func handleIdle() {
         guard phase == .working else {
             if isAway { isAway = false }
@@ -418,13 +422,23 @@ final class BreakEngine: ObservableObject {
         let idle = SystemIdle.seconds()
         let threshold = settings.idleThresholdMinutes * 60
         if idle >= threshold {
-            if !isAway { Log.debug("자리 비움 감지 (유휴 \(Int(idle))s)") }
-            isAway = true
-            phaseEnd = phaseEnd.addingTimeInterval(1)  // 한 틱만큼 미뤄 남은 시간 유지
+            if !isAway {
+                isAway = true
+                awayStart = Date().addingTimeInterval(-idle)   // 실제로 입력이 끊긴 시점
+                Log.debug("자리 비움 감지 (유휴 \(Int(idle))s)")
+            }
+            phaseEnd = phaseEnd.addingTimeInterval(1)           // 남은 시간 동결
+            nextMicroBreak = nextMicroBreak.addingTimeInterval(1)  // 동결 중엔 동작 알림도 함께 밀어 복귀 즉시 발화 방지
         } else if isAway {
             isAway = false
-            Log.debug("복귀 → 작업 리셋")
-            startWork()                                // 휴식으로 인정 → 작업 리셋
+            let awayFor = Date().timeIntervalSince(awayStart)
+            if awayFor >= settings.breakMinutes * 60 {
+                Log.debug("복귀 (자리 비움 \(Int(awayFor))s ≥ 휴식) → 작업 리셋")
+                startWork()                                    // 충분히 쉰 셈 → 사이클 리셋
+            } else {
+                Log.debug("복귀 (자리 비움 \(Int(awayFor))s < 휴식) → 남은 시간 이어감")
+                // 동결 해제만: phaseEnd는 이미 남은 시간을 보존하도록 밀려 있어 그대로 이어간다.
+            }
         }
     }
 
