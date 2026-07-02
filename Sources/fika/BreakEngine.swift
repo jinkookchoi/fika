@@ -588,6 +588,13 @@ final class BreakEngine: ObservableObject {
         case .breakHold, .paused, .scheduledRest:
             break
         }
+        // 연기로 남은 시간이 바뀌었으니 알림 스케줄을 새 남은 시간에 맞춰 재정렬한다.
+        // (안 하면: 연장 구간에 남은 시간 알림이 안 오거나, 마지막 "곧 휴식"이 다시 안 뜨거나,
+        //  마이크로 브레이크가 옛 기준점이라 복귀 즉시 뜬다.)
+        if phase == .working {
+            resetTimeNoticeBucket(forRemaining: remaining)   // timeNoticeFinalFired 도 함께 리셋됨
+            nextMicroBreak = Date().addingTimeInterval(settings.microBreakMinutes * 60)
+        }
         refreshPresentation()
     }
 }
