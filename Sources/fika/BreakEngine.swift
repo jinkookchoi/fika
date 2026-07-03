@@ -65,6 +65,8 @@ final class BreakEngine: ObservableObject {
     /// 고정 휴식 사전 예고: 오늘 이미 쐈는지 + 날짜키 (자정에 리셋)
     private var restPrealertFired = false
     private var restPrealertDay = -1
+    /// 이번 고정 휴식 시간대를 사용자가 취소(건너뛰기)했는지. 윈도우를 벗어나면 자동 해제된다.
+    private var scheduledRestSkipped = false
     private lazy var overlay = OverlayController(engine: self)
 
     /// 메뉴바 호버 팁 표시/숨김 (AppDelegate 의 트래킹에서 호출).
@@ -313,21 +315,30 @@ final class BreakEngine: ObservableObject {
     /// 절대 시각 기반이라 sleep/wake 보정이 따로 필요 없다(깨어나면 "지금 시각이 윈도우 안인가"만 본다).
     private func handleScheduledRest() -> Bool {
         let inWindow = settings.isWithinScheduledRest(Date())
+        if !inWindow { scheduledRestSkipped = false }   // 윈도우를 벗어나면 취소 해제 → 다음 시간대/내일 정상 작동
         if phase == .scheduledRest {
-            if inWindow {
+            if inWindow && !scheduledRestSkipped {
                 remaining = settings.scheduledRestSecondsLeft(Date())   // 윈도우 끝까지 남은 시간
                 refreshPresentation()
                 return true
             }
-            Log.event("예약 휴식 종료 → 작업 시작")
+            Log.event(scheduledRestSkipped ? "예약 휴식 취소 → 작업 시작" : "예약 휴식 종료 → 작업 시작")
             startWorkFromBreak()                                        // 작업 새로 시작 + 시작 토스트
             return true
         }
-        if inWindow {
+        if inWindow && !scheduledRestSkipped {
             enterScheduledRest()
             return true
         }
         return false
+    }
+
+    /// 고정 휴식 시간대를 지금 취소하고 작업을 시작한다. (오늘 그 시간대엔 다시 진입 안 함)
+    func cancelScheduledRest() {
+        guard phase == .scheduledRest else { return }
+        scheduledRestSkipped = true
+        Log.event("예약 휴식 취소(수동) → 작업 시작")
+        startWorkFromBreak()
     }
 
     private func enterScheduledRest() {

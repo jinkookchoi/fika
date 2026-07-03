@@ -223,6 +223,9 @@ private struct HomeTab: View {
                     Text("고정 휴식 중 — 끝나면 자동으로 작업을 시작해요")
                         .font(.caption).foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
+                    Button { engine.cancelScheduledRest() } label: {
+                        Label("지금 작업 시작", systemImage: "play.fill")
+                    }
                 } else {
                     Button { engine.breakNow() } label: {
                         Label("지금 휴식하기", systemImage: "cup.and.saucer.fill")
