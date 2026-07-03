@@ -38,6 +38,44 @@ enum BreakStyle: String, CaseIterable, Identifiable {
     }
 }
 
+/// 남은 시간 알림 토스트가 뜨는 위치.
+enum ToastPosition: String, CaseIterable, Identifiable {
+    case topCenter, center, bottomRight
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .topCenter:   return "상단 중앙"
+        case .center:      return "화면 중앙"
+        case .bottomRight: return "우하단"
+        }
+    }
+}
+
+/// 토스트 등장 모션.
+enum ToastMotion: String, CaseIterable, Identifiable {
+    case spring, slide, bounce
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .spring: return "스프링"
+        case .slide:  return "슬라이드"
+        case .bounce: return "바운스"
+        }
+    }
+}
+
+/// 남은 시간 알림 소리. 지금은 없음/차임. (향후 음성(TTS) 확장 여지를 위해 enum 으로 둠)
+enum NoticeSound: String, CaseIterable, Identifiable {
+    case none, chime
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .none:  return "없음"
+        case .chime: return "차임"
+        }
+    }
+}
+
 /// 사용자 설정. UserDefaults 에 자동 저장됩니다.
 @MainActor
 final class AppSettings: ObservableObject {
@@ -87,6 +125,15 @@ final class AppSettings: ObservableObject {
     @Published var timeNoticeEnabled: Bool        { didSet { d.set(timeNoticeEnabled, forKey: "timeNoticeEnabled"); onScheduleChange?() } }
     /// 남은 시간 알림 주기(분)
     @Published var timeNoticeMinutes: Double      { didSet { d.set(timeNoticeMinutes, forKey: "timeNoticeMinutes"); onScheduleChange?() } }
+    // 남은 시간 알림 겉모습/동작 (각각 독립 설정)
+    @Published var timeNoticePosition: ToastPosition { didSet { d.set(timeNoticePosition.rawValue, forKey: "timeNoticePosition") } }
+    @Published var timeNoticeHero: Bool           { didSet { d.set(timeNoticeHero, forKey: "timeNoticeHero") } }
+    @Published var timeNoticeWarm: Bool           { didSet { d.set(timeNoticeWarm, forKey: "timeNoticeWarm") } }
+    @Published var timeNoticeBig: Bool            { didSet { d.set(timeNoticeBig, forKey: "timeNoticeBig") } }
+    @Published var timeNoticeMotion: ToastMotion  { didSet { d.set(timeNoticeMotion.rawValue, forKey: "timeNoticeMotion") } }
+    @Published var timeNoticePulse: Bool          { didSet { d.set(timeNoticePulse, forKey: "timeNoticePulse") } }
+    @Published var timeNoticeDuration: Double     { didSet { d.set(timeNoticeDuration, forKey: "timeNoticeDuration") } }
+    @Published var timeNoticeSound: NoticeSound   { didSet { d.set(timeNoticeSound.rawValue, forKey: "timeNoticeSound") } }
     /// 고정 휴식 시간대 사용 (예: 점심 11:30~13:00엔 무조건 쉼)
     @Published var scheduledRestEnabled: Bool     { didSet { d.set(scheduledRestEnabled, forKey: "scheduledRestEnabled") } }
     /// 시작/끝 (자정 기준 분). 기본 11:30~13:00
@@ -127,6 +174,14 @@ final class AppSettings: ObservableObject {
         microBreakMinutes     = dbl("microBreakMinutes", 10)
         timeNoticeEnabled     = bool("timeNoticeEnabled", false)
         timeNoticeMinutes     = dbl("timeNoticeMinutes", 5)
+        timeNoticePosition    = ToastPosition(rawValue: store.string(forKey: "timeNoticePosition") ?? "") ?? .topCenter
+        timeNoticeHero        = bool("timeNoticeHero", true)
+        timeNoticeWarm        = bool("timeNoticeWarm", false)
+        timeNoticeBig         = bool("timeNoticeBig", false)
+        timeNoticeMotion      = ToastMotion(rawValue: store.string(forKey: "timeNoticeMotion") ?? "") ?? .slide
+        timeNoticePulse       = bool("timeNoticePulse", true)
+        timeNoticeDuration    = dbl("timeNoticeDuration", 7)
+        timeNoticeSound       = NoticeSound(rawValue: store.string(forKey: "timeNoticeSound") ?? "") ?? .chime
         scheduledRestEnabled  = bool("scheduledRestEnabled", false)
         scheduledRestStart    = int("scheduledRestStart", 11 * 60 + 30)
         scheduledRestEnd      = int("scheduledRestEnd", 13 * 60)

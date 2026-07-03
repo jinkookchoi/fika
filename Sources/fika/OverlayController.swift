@@ -184,15 +184,23 @@ final class OverlayController {
     func showTimeNotice(final: Bool = false) {
         hideStartToast()
         guard let screen = activeScreen else { return }
-        let w: CGFloat = 520, h: CGFloat = 140   // 토스트 + 글로우 여백
+        let s = engine.settings
+        let big = s.timeNoticeBig
+        let w: CGFloat = big ? 560 : 520, h: CGFloat = big ? 156 : 140   // 토스트 + 글로우 여백
         let f = screen.visibleFrame
-        let rect = NSRect(x: f.midX - w / 2, y: f.maxY - h - 16, width: w, height: h)
+        let rect: NSRect
+        switch s.timeNoticePosition {
+        case .topCenter:   rect = NSRect(x: f.midX - w / 2, y: f.maxY - h - 16, width: w, height: h)
+        case .center:      rect = NSRect(x: f.midX - w / 2, y: f.midY - h / 2,  width: w, height: h)
+        case .bottomRight: rect = NSRect(x: f.maxX - w,     y: f.minY + 8,      width: w, height: h)
+        }
         let win = makeWindow(frame: rect, level: .statusBar, passThrough: false)
         setHosted(win, TimeNoticeToastView(engine: engine, isFinal: final, onClose: { [weak self] in self?.hideStartToast() }))
         win.orderFront(nil)
         toastWindow = win
         NotificationLog.shared.record("남은시간", final ? "곧 휴식이에요" : "휴식까지 \(engine.remainingMinutesRounded)분 남았어요")
-        toastTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: false) { [weak self] _ in
+        Sound.playNotice(s.timeNoticeSound)
+        toastTimer = Timer.scheduledTimer(withTimeInterval: max(2, s.timeNoticeDuration), repeats: false) { [weak self] _ in
             Task { @MainActor in self?.hideStartToast() }
         }
     }

@@ -168,44 +168,85 @@ struct TimeNoticeToastView: View {
     var isFinal: Bool = false
     let onClose: () -> Void
     @State private var shown = false
+    @State private var pulseScale: CGFloat = 1
 
+    private var s: AppSettings { engine.settings }
     private var minutesLeft: Int { engine.remainingMinutesRounded }
+    private var big: Bool { s.timeNoticeBig }
+    private var warm: Bool { s.timeNoticeWarm }
+    private var hero: Bool { s.timeNoticeHero && !isFinal }   // 최종 알림은 항상 문구
+
+    // 색 (파스텔 ↔ 임박 앰버)
+    private var brown: Color { Color(red: 0.55, green: 0.40, blue: 0.25) }
+    private var ink: Color { Color(red: 0.24, green: 0.15, blue: 0.08) }
+    private var accent: Color { Color(red: 0.878, green: 0.439, blue: 0.122) }   // 임박 오렌지
+    private var cardColor: Color { warm ? Color(red: 0.965, green: 0.902, blue: 0.788) : Color(red: 0.97, green: 0.93, blue: 0.85) }
+    private var borderColor: Color { warm ? accent : Color(red: 0.80, green: 0.60, blue: 0.30) }
+    private var glowColor: Color { warm ? accent.opacity(0.5) : Color(red: 0.98, green: 0.78, blue: 0.42).opacity(0.6) }
+    private var numColor: Color { warm ? accent : ink }
+
+    // 등장 모션
+    private var startOffsetY: CGFloat { switch s.timeNoticeMotion { case .spring: 0; case .slide: -34; case .bounce: -30 } }
+    private var startScale: CGFloat { switch s.timeNoticeMotion { case .spring: 0.9; case .slide: 1; case .bounce: 0.96 } }
+    private var entryAnim: Animation {
+        switch s.timeNoticeMotion {
+        case .spring: .spring(response: 0.4, dampingFraction: 0.7)
+        case .slide:  .spring(response: 0.45, dampingFraction: 0.85)
+        case .bounce: .spring(response: 0.5, dampingFraction: 0.5)
+        }
+    }
 
     var body: some View {
         HStack(spacing: 11) {
             if let cut = MascotCut.image(engine.mascotCut) {
-                cut.resizable().interpolation(.high).scaledToFit().frame(width: 34, height: 34)
+                cut.resizable().interpolation(.high).scaledToFit().frame(width: big ? 40 : 34, height: big ? 40 : 34)
             } else {
-                Text("☕").font(.title2)
+                Text("☕").font(big ? .largeTitle : .title2)
             }
-            VStack(alignment: .leading, spacing: 2) {
-                Text(isFinal ? "곧 휴식이에요" : "아직 집중 중이에요")
-                    .font(.caption).foregroundStyle(Color(red: 0.55, green: 0.40, blue: 0.25))
-                Text(isFinal ? "잠깐 정리하고 일어날 준비해요" : "휴식까지 \(minutesLeft)분 남았어요")
-                    .font(.callout.weight(.semibold))
-                    .foregroundStyle(Color(red: 0.24, green: 0.15, blue: 0.08))
+            if hero {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("\(minutesLeft)")
+                        .font(.system(size: big ? 58 : 50, weight: .bold, design: .rounded))
+                        .foregroundStyle(numColor)
+                    Text("분 뒤 휴식").font(.callout.weight(.semibold)).foregroundStyle(brown)
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(isFinal ? "곧 휴식이에요" : "아직 집중 중이에요")
+                        .font(big ? .callout : .caption).foregroundStyle(brown)
+                    Text(isFinal ? "잠깐 정리하고 일어날 준비해요" : "휴식까지 \(minutesLeft)분 남았어요")
+                        .font((big ? Font.title3 : Font.callout).weight(.semibold))
+                        .foregroundStyle(warm ? Color(red: 0.35, green: 0.18, blue: 0.05) : ink)
+                }
             }
             Spacer(minLength: 6)
             Button(action: onClose) {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 16))
-                    .foregroundStyle(Color(red: 0.55, green: 0.40, blue: 0.25).opacity(0.55))
+                    .foregroundStyle(brown.opacity(0.55))
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, 16).padding(.vertical, 12)
-        .frame(maxWidth: 440)
-        .background(Color(red: 0.97, green: 0.93, blue: 0.85),
-                    in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .padding(.horizontal, big ? 20 : 16).padding(.vertical, big ? 15 : 12)
+        .frame(maxWidth: big ? 500 : 440)
+        .background(cardColor, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous)
-            .strokeBorder(Color(red: 0.80, green: 0.60, blue: 0.30), lineWidth: 1.5))
-        .shadow(color: Color(red: 0.98, green: 0.78, blue: 0.42).opacity(0.6), radius: 18)
+            .strokeBorder(borderColor, lineWidth: 1.5))
+        .shadow(color: glowColor, radius: big ? 22 : 18)
         .shadow(color: .black.opacity(0.22), radius: 6, y: 2)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         .opacity(shown ? 1 : 0)
-        .scaleEffect(shown ? 1 : 0.9)
+        .scaleEffect(shown ? pulseScale : startScale)
+        .offset(y: shown ? 0 : startOffsetY)
         .onAppear {
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) { shown = true }
+            withAnimation(entryAnim) { shown = true }
+            if s.timeNoticePulse {
+                withAnimation(.easeInOut(duration: 0.26).delay(0.42)) {
+                    pulseScale = 1.05
+                } completion: {
+                    withAnimation(.easeInOut(duration: 0.26)) { pulseScale = 1 }
+                }
+            }
         }
     }
 }

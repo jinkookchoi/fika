@@ -52,6 +52,20 @@ private func stepperRow(_ title: String, _ value: Binding<Double>, _ range: Clos
     }
 }
 
+/// enum 설정용 컴팩트 메뉴 픽커 행.
+private func enumPickerRow<T: CaseIterable & Identifiable & Hashable>(
+    _ title: String, _ selection: Binding<T>, _ label: @escaping (T) -> String
+) -> some View where T.AllCases: RandomAccessCollection {
+    HStack {
+        Text(title)
+        Spacer()
+        Picker("", selection: selection) {
+            ForEach(T.allCases) { Text(label($0)).tag($0) }
+        }
+        .labelsHidden().pickerStyle(.menu).fixedSize()
+    }
+}
+
 // MARK: - 탭
 
 enum PanelTab: CaseIterable {
@@ -359,6 +373,17 @@ private struct AlertsTab: View {
             Toggle("남은 시간 알림 켜기", isOn: $settings.timeNoticeEnabled)
             if settings.timeNoticeEnabled {
                 stepperRow("알림 주기(분)", $settings.timeNoticeMinutes, 5...120, 5)
+
+                Text("겉모습 · 동작 (아래 알림 테스트 → \"남은시간\" 버튼으로 바로 확인)")
+                    .font(.caption).foregroundStyle(.secondary).padding(.top, 2)
+                enumPickerRow("위치", $settings.timeNoticePosition) { $0.label }
+                enumPickerRow("등장 모션", $settings.timeNoticeMotion) { $0.label }
+                enumPickerRow("소리", $settings.timeNoticeSound) { $0.label }
+                stepperRow("표시 시간(초)", $settings.timeNoticeDuration, 3...10, 1)
+                Toggle("숫자 크게 (히어로)", isOn: $settings.timeNoticeHero).font(.callout)
+                Toggle("임박 강조 색", isOn: $settings.timeNoticeWarm).font(.callout)
+                Toggle("카드 크게", isOn: $settings.timeNoticeBig).font(.callout)
+                Toggle("유지 중 살짝 펄스", isOn: $settings.timeNoticePulse).font(.callout)
             }
 
             Divider()
