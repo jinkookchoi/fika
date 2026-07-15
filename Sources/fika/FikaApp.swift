@@ -55,6 +55,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // 메뉴바 갱신 — 커피 프레임 재생 중엔 ~10Hz, 그 외(이모지·심볼·정지 프레임)엔 1Hz로 낮춤(C-3).
         scheduleTitleTimer(interval: 0.1)
+
+        // 개발용: FIKA_TEST_TOAST=start|stretch|time|timeFinal|shutdown|shutdownStop|rest 로 실행하면
+        // 1초 뒤 해당 토스트를 한 번 띄운다(시각 확인용). 일반 실행엔 영향 없음.
+        if let kind = ProcessInfo.processInfo.environment["FIKA_TEST_TOAST"] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [engine] in
+                engine.postTestToast(kind)
+            }
+            // FIKA_SNAPSHOT_OUT=<경로.png> 를 함께 주면 토스트를 PNG로 저장하고 종료한다.
+            if let out = ProcessInfo.processInfo.environment["FIKA_SNAPSHOT_OUT"] {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [engine] in
+                    engine.snapshotToast(to: out)
+                    NSApp.terminate(nil)
+                }
+            }
+        }
     }
 
     /// 메뉴바 갱신 타이머를 주어진 주기로 (재)설정한다. 주기가 그대로면 무시(불필요한 재생성 방지).

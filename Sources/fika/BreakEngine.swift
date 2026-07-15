@@ -661,6 +661,28 @@ final class BreakEngine: ObservableObject {
 
     // MARK: - 알림 테스트 (설정 패널에서 즉석 확인용 — 멀티 모니터에서 "어느 화면에 뜨는지"도 확인)
 
+    /// 개발용(FIKA_TEST_TOAST): 현재 토스트 창을 PNG로 저장.
+    func snapshotToast(to path: String) { overlay.snapshotToast(to: path) }
+
+    /// 개발용(FIKA_TEST_TOAST 환경변수): 이름으로 토스트를 하나 띄운다. 시각 확인 전용.
+    func postTestToast(_ name: String) {
+        switch name {
+        case "start":        overlay.post(.start)
+        case "stretch":      overlay.post(.stretch(tip: "발목을 위아래로 까딱까딱 (혈액순환!)"))
+        case "time":         overlay.post(.timeNotice(final: false))
+        case "time15":       // "40분 세션 중 15분 남음" 상황 재현
+            setTimeUntilBreak(15); phaseDuration = 40 * 60
+            overlay.post(.timeNotice(final: false))
+        case "timeFinal":    overlay.post(.timeNotice(final: true))
+        case "shutdown":     overlay.post(.shutdown(title: "오늘 일 마무리 30분 전이에요",
+                                                    subtitle: "18:00에 마쳐요. 슬슬 준비하세요", stop: false))
+        case "shutdownStop": overlay.post(.shutdown(title: "오늘 일은 여기까지예요 ☕",
+                                                    subtitle: "오늘 7회 · 3시간 42분 집중했어요. 수고했어요", stop: true))
+        case "rest":         overlay.post(.scheduledRest(title: "점심", subtitle: "13:00까지 쉬어요"))
+        default:             Log.event("FIKA_TEST_TOAST 알 수 없는 종류: \(name)")
+        }
+    }
+
     func testStretchAlert() {
         let tip = settings.stretchTips.filter { !$0.isEmpty }.randomElement() ?? "발목을 위아래로 까딱까딱 (혈액순환!)"
         overlay.post(.stretch(tip: tip))

@@ -95,7 +95,7 @@ final class OverlayController {
     // MARK: - 토스트 알림 (잠깐 떴다 사라지는 알림 — 단일 진입점)
 
     /// 모든 토스트 알림의 단일 진입점. 발화처(BreakEngine)는 Notice만 만들고,
-    /// 창 생성·표시 시간·로그 기록·소리는 전부 여기서 처리한다.
+    /// 표시(ToastView 템플릿·창 실측·로그 기록·소리)는 전부 여기서 처리한다.
     /// 겹침은 기존과 동일하게 "떠 있던 토스트를 내리고 즉시 표시" — 우선순위/대기 정책은 커밋 ③에서.
     func post(_ notice: Notice) {
         hideToast()
@@ -103,52 +103,32 @@ final class OverlayController {
         let s = engine.settings
         let f = screen.visibleFrame
 
-        // 종류별 뷰·창 크기·위치·로그 문구. (뷰는 커밋 ②에서 ToastView 한 벌로 통일 예정)
-        let view: AnyView
-        let w: CGFloat, h: CGFloat
-        var rect: NSRect? = nil            // nil이면 기본 위치(상단 중앙)
-        let logMessage: String
+        let (spec, logMessage) = makeSpec(for: notice)
+        let view = ToastView(spec: spec,
+                             big: s.timeNoticeBig,
+                             motion: s.timeNoticeMotion,
+                             pulse: s.timeNoticePulse,
+                             onClose: { [weak self] in self?.hideToast() })
 
-        switch notice {
-        case .start:
-            (w, h) = (520, 140)            // 토스트(최대 440) + 글로우 여백
-            view = AnyView(StartToastView(engine: engine, onClose: { [weak self] in self?.hideToast() }))
-            logMessage = "이제 시작해볼까요?"
+        // 폭 고정·높이 가변: 표시 전에 "측정 전용" 호스트로 한 번 실측해 창 프레임을 확정한다.
+        // 주의: 표시용 호스트에 fittingSize를 물으면 사이징 제약이 생겨, 창에 얹는 순간
+        // Auto Layout이 창을 카드 크기로 줄여버린다(여백 소실 → 등장 모션 때 좌우 잘림).
+        // 그래서 측정은 창에 얹지 않는 일회용 뷰로만 하고, 표시는 setHosted(sizingOptions=[]) 경로로.
+        let probe = NSHostingView(rootView: view)
+        let fit = probe.fittingSize
+        let w = (fit.width > 0 ? fit.width : (s.timeNoticeBig ? 500 : 440)) + 80   // 글로우+등장 모션 여백
+        let h = min(max(fit.height, 60), 400) + 68
 
-        case .stretch(let tip):
-            (w, h) = (520, 140)
-            view = AnyView(StretchToastView(text: tip, onClose: { [weak self] in self?.hideToast() }))
-            logMessage = tip
-
-        case .timeNotice(let final):
-            let big = s.timeNoticeBig
-            (w, h) = big ? (560, 156) : (520, 140)
-            switch s.timeNoticePosition {
-            case .topCenter:   break       // 기본 위치
-            case .center:      rect = NSRect(x: f.midX - w / 2, y: f.midY - h / 2, width: w, height: h)
-            case .bottomRight: rect = NSRect(x: f.maxX - w,     y: f.minY + 8,     width: w, height: h)
-            }
-            view = AnyView(TimeNoticeToastView(engine: engine, isFinal: final, onClose: { [weak self] in self?.hideToast() }))
-            logMessage = final ? "곧 휴식이에요" : "휴식까지 \(engine.remainingMinutesRounded)분 남았어요"
-
-        case .shutdown(let title, let subtitle, let stop):
-            (w, h) = (520, 150)
-            view = AnyView(ShutdownToastView(
-                title: title, subtitle: subtitle, showStop: stop,
-                onStop: { [weak self] in self?.engine.quietForToday(); self?.hideToast() },
-                onClose: { [weak self] in self?.hideToast() }))
-            logMessage = title
-
-        case .scheduledRest(let title, let subtitle):
-            (w, h) = (520, 140)
-            view = AnyView(ScheduledRestToastView(title: title, subtitle: subtitle,
-                                                  onClose: { [weak self] in self?.hideToast() }))
-            logMessage = title
+        let rect: NSRect
+        switch s.timeNoticePosition {   // 표시 위치: 전 토스트 공통 설정
+        case .topCenter:   rect = NSRect(x: f.midX - w / 2, y: f.maxY - h - 16, width: w, height: h)
+        case .center:      rect = NSRect(x: f.midX - w / 2, y: f.midY - h / 2,  width: w, height: h)
+        case .bottomRight: rect = NSRect(x: f.maxX - w,     y: f.minY + 8,      width: w, height: h)
         }
-
-        let frame = rect ?? NSRect(x: f.midX - w / 2, y: f.maxY - h - 16, width: w, height: h)
-        let win = makeWindow(frame: frame, level: .statusBar, passThrough: false)
-        setHosted(win, view)
+        let win = makeWindow(frame: rect, level: .statusBar, passThrough: false)
+        // 루트뷰는 반드시 유연하게(maxWidth/Height ∞) 얹는다 — 고정 크기 루트를 그대로 얹으면
+        // NSHostingView가 자신을 카드 크기로 줄여 글로우·등장 모션이 그 경계에서 잘린다.
+        setHosted(win, view.frame(maxWidth: .infinity, maxHeight: .infinity))
         win.orderFront(nil)
         toastWindow = win
 
@@ -159,6 +139,56 @@ final class OverlayController {
         let duration = notice.duration ?? max(2, s.timeNoticeDuration)
         toastTimer = Timer.scheduledTimer(withTimeInterval: duration, repeats: false) { [weak self] _ in
             Task { @MainActor in self?.hideToast() }
+        }
+    }
+
+    /// Notice → 토스트 내용(spec)과 알림 이력 문구.
+    private func makeSpec(for notice: Notice) -> (ToastSpec, String) {
+        let s = engine.settings
+        switch notice {
+        case .start:
+            return (ToastSpec(cut: "work", emoji: "🌱", theme: .green,
+                              caption: "이제 시작해볼까요?",
+                              title: "\(Int(s.workMinutes))분, 열심히 해봐요"),
+                    "이제 시작해볼까요?")
+
+        case .stretch(let tip):
+            return (ToastSpec(cut: "work", emoji: "☕",
+                              caption: "잠깐, 이거 해볼까요?", title: tip),
+                    tip)
+
+        case .timeNotice(let final):
+            let mins = engine.remainingMinutesRounded
+            var spec = ToastSpec(cut: engine.mascotCut, emoji: "☕",
+                                 theme: s.timeNoticeWarm ? .amber : .warm,
+                                 caption: final ? "곧 휴식이에요" : "아직 집중 중이에요",
+                                 title: final ? "잠깐 정리하고 일어날 준비해요" : "휴식까지 \(mins)분 남았어요")
+            if s.timeNoticeHero && !final {   // 최종 알림은 항상 문구
+                spec.heroNumber = "\(mins)분"
+                spec.heroSuffix = " 뒤 휴식이에요"
+            }
+            if !final {
+                // 커피잔으로 남은/지난 시간 시각화. 기본 1잔=5분, 긴 세션은 단위를 키워
+                // 항상 12잔 이내로 유지(작업 시간 설정 최대 180분 → 5분 단위면 36잔이라 한 줄에 안 들어감).
+                let sessionMin = engine.phaseDuration / 60
+                let unitMin: Double = sessionMin <= 60 ? 5 : (sessionMin <= 120 ? 10 : 15)
+                let per = unitMin * 60
+                let total = min(14, max(1, Int((engine.phaseDuration / per).rounded(.up))))   // 14 = snooze 연장 방어
+                let filled = min(total, max(0, Int((engine.remaining / per).rounded(.up))))
+                spec.cups = (filled: filled, total: total)
+            }
+            return (spec, final ? "곧 휴식이에요" : "휴식까지 \(mins)분 남았어요")
+
+        case .shutdown(let title, let subtitle, let stop):
+            var spec = ToastSpec(cut: "done", emoji: "☕", title: title, subtitle: subtitle)
+            if stop {
+                spec.buttonLabel = "오늘은 그만"
+                spec.buttonAction = { [weak self] in self?.engine.quietForToday(); self?.hideToast() }
+            }
+            return (spec, title)
+
+        case .scheduledRest(let title, let subtitle):
+            return (ToastSpec(cut: "resting", emoji: "☕", title: title, subtitle: subtitle), title)
         }
     }
 
@@ -175,6 +205,14 @@ final class OverlayController {
 
     /// 토스트가 지금 떠 있는지. (서로 겹치지 않게 양보 판단용)
     var isToastVisible: Bool { toastWindow != nil }
+
+    /// 개발용(FIKA_TEST_TOAST): 현재 토스트 창을 PNG로 저장 — 화면 캡처 권한 없이 시각 확인.
+    func snapshotToast(to path: String) {
+        guard let view = toastWindow?.contentView,
+              let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
+        view.cacheDisplay(in: view.bounds, to: rep)
+        try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
+    }
 
     // MARK: - 메뉴바 호버 팁 (시간 감춤 상태에서 아이콘에 마우스 올리면)
 
