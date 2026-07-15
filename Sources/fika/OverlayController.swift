@@ -10,8 +10,6 @@ final class OverlayController {
     private var breakWindows: [NSWindow] = []
     private var currentStyle: BreakStyle?
     private var warningWindow: NSWindow?
-    private var toastWindow: NSWindow?
-    private var toastTimer: Timer?
 
     init(engine: BreakEngine) {
         self.engine = engine
@@ -95,21 +93,40 @@ final class OverlayController {
 
     // MARK: - 토스트 알림 (잠깐 떴다 사라지는 알림 — 단일 진입점)
 
-    /// 지금 떠 있는 토스트의 Notice (우선순위 비교용).
-    private var currentNotice: Notice?
-    /// 대기 1건: 슬롯이 비면 표시하고, 유효기한이 지나면 조용히 폐기.
+    /// 화면에 떠 있는 토스트 하나 (창 + 내용 + 소멸 타이머).
+    private struct ActiveToast {
+        let window: NSWindow
+        let notice: Notice
+        var timer: Timer?
+    }
+
+    /// 떠 있는 토스트들 — 최대 2장 스택. [0]이 기준 위치(먼저 뜬 것), 새 카드는 그 아래(우하단 배치면 위)에 쌓인다.
+    private var toasts: [ActiveToast] = []
+    /// 대기 1건: 두 자리가 다 찼을 때. 슬롯이 비면 표시하고, 유효기한이 지나면 조용히 폐기.
     private var pending: (notice: Notice, expires: Date)?
+    /// 스택 시 창끼리 겹치는 높이 — 창의 상하 여백(각 ~34pt) 합 68에서 이만큼 빼면 카드 사이 시각 간격.
+    /// 44 → 간격 ~24pt (글로우 18pt가 서로 섞이지 않을 만큼).
+    private static let stackOverlap: CGFloat = 44
 
     /// 모든 토스트 알림의 단일 진입점. 발화처(BreakEngine)는 Notice만 만들고,
-    /// 표시(ToastView 템플릿·창 실측·로그 기록·소리)와 겹침 정책(교체/대기/폐기)을 여기서 처리한다.
+    /// 표시(ToastView 템플릿·창 실측·로그 기록·소리)와 겹침 정책을 여기서 처리한다.
+    /// 겹침: 자리(2장)가 있으면 스택으로 바로 표시, 다 찼으면 덜 급한 쪽과 비교해 교체 or 대기 1건.
     func post(_ notice: Notice) {
+        // 같은 종류가 이미 떠 있으면 그 카드를 내리고 새 내용으로 (연타·문구 갱신 대비)
+        if let dup = toasts.first(where: { $0.notice.logCategory == notice.logCategory }) {
+            hide(dup.window)
+        }
+        let victim = toasts.max { $0.notice.priority < $1.notice.priority }   // 덜 급한 쪽(숫자 큰 쪽)
         let decision = NoticePolicy.decide(
             newPriority: notice.priority,
             warningHold: engine.isWarning && notice.waitsDuringWarning,
-            currentPriority: currentNotice?.priority)
+            currentPriority: toasts.count >= 2 ? victim?.notice.priority : nil)   // 자리 있으면 nil → 즉시 표시
         switch decision {
-        case .show, .replace:
-            display(notice)   // 교체로 밀려난 토스트는 폐기(일부는 이미 보였으므로 재대기 안 함)
+        case .show:
+            display(notice)
+        case .replace:
+            if let victim { hide(victim.window) }   // 밀려난 토스트는 폐기(이미 보였으므로 재대기 안 함)
+            display(notice)
         case .wait:
             if NoticePolicy.shouldReplacePending(newPriority: notice.priority,
                                                  pendingPriority: pending?.notice.priority) {
@@ -123,7 +140,7 @@ final class OverlayController {
 
     /// 대기 중인 토스트를 표시할 수 있으면 표시한다. 엔진 tick(1초)마다 호출.
     func flushPending() {
-        guard toastWindow == nil, let p = pending else { return }
+        guard toasts.count < 2, let p = pending else { return }
         if Date() > p.expires {
             pending = nil
             Log.debug("대기 토스트 만료 폐기 (\(p.notice.logCategory))")
@@ -139,19 +156,22 @@ final class OverlayController {
         display(p.notice)
     }
 
-    /// 토스트를 실제로 화면에 올린다 (창 실측·로그·소리·타이머).
+    /// X 버튼 클로저가 "자기 창"을 닫을 수 있게 하는 약한 참조 상자 (뷰가 창보다 먼저 만들어져서 필요).
+    private final class WindowBox { weak var window: NSWindow? }
+
+    /// 토스트를 실제로 화면에 올린다 (창 실측·스택 위치·로그·소리·타이머).
     private func display(_ notice: Notice) {
-        hideToast()
         guard let screen = activeScreen else { return }
         let s = engine.settings
         let f = screen.visibleFrame
 
         let (spec, logMessage) = makeSpec(for: notice)
+        let box = WindowBox()
         let view = ToastView(spec: spec,
                              big: s.timeNoticeBig,
                              motion: s.timeNoticeMotion,
                              pulse: s.timeNoticePulse,
-                             onClose: { [weak self] in self?.hideToast() })
+                             onClose: { [weak self] in self?.hide(box.window) })
 
         // 폭 고정·높이 가변: 표시 전에 "측정 전용" 호스트로 한 번 실측해 창 프레임을 확정한다.
         // 주의: 표시용 호스트에 fittingSize를 물으면 사이징 제약이 생겨, 창에 얹는 순간
@@ -162,27 +182,44 @@ final class OverlayController {
         let w = (fit.width > 0 ? fit.width : (s.timeNoticeBig ? 500 : 440)) + 80   // 글로우+등장 모션 여백
         let h = min(max(fit.height, 60), 400) + 68
 
-        let rect: NSRect
-        switch s.timeNoticePosition {   // 표시 위치: 전 토스트 공통 설정
-        case .topCenter:   rect = NSRect(x: f.midX - w / 2, y: f.maxY - h - 16, width: w, height: h)
-        case .center:      rect = NSRect(x: f.midX - w / 2, y: f.midY - h / 2,  width: w, height: h)
-        case .bottomRight: rect = NSRect(x: f.maxX - w,     y: f.minY + 8,      width: w, height: h)
-        }
+        // 이미 떠 있는 카드가 있으면 그 곁에 스택, 없으면 기준 위치.
+        let rect = toasts.last.map { stackedFrame(anchor: $0.window.frame, w: w, h: h, in: f, position: s.timeNoticePosition) }
+            ?? primaryFrame(w: w, h: h, in: f, position: s.timeNoticePosition)
         let win = makeWindow(frame: rect, level: .statusBar, passThrough: false)
+        box.window = win
         // 루트뷰는 반드시 유연하게(maxWidth/Height ∞) 얹는다 — 고정 크기 루트를 그대로 얹으면
         // NSHostingView가 자신을 카드 크기로 줄여 글로우·등장 모션이 그 경계에서 잘린다.
         setHosted(win, view.frame(maxWidth: .infinity, maxHeight: .infinity))
         win.orderFront(nil)
-        toastWindow = win
-        currentNotice = notice
+
+        var toast = ActiveToast(window: win, notice: notice, timer: nil)
+        let duration = notice.duration ?? max(2, s.timeNoticeDuration)
+        toast.timer = Timer.scheduledTimer(withTimeInterval: duration, repeats: false) { [weak self, weak win] _ in
+            Task { @MainActor in self?.hide(win) }
+        }
+        toasts.append(toast)
 
         NotificationLog.shared.record(notice.logCategory, logMessage)
         if case .timeNotice = notice { Sound.playNotice(s.timeNoticeSound) }
-        Log.debug("토스트 표시 (\(notice.logCategory))")
+        Log.debug("토스트 표시 (\(notice.logCategory), 스택 \(toasts.count)장)")
+    }
 
-        let duration = notice.duration ?? max(2, s.timeNoticeDuration)
-        toastTimer = Timer.scheduledTimer(withTimeInterval: duration, repeats: false) { [weak self] _ in
-            Task { @MainActor in self?.hideToast() }
+    /// 기준 위치(1장째)의 창 프레임.
+    private func primaryFrame(w: CGFloat, h: CGFloat, in f: NSRect, position: ToastPosition) -> NSRect {
+        switch position {
+        case .topCenter:   return NSRect(x: f.midX - w / 2, y: f.maxY - h - 16, width: w, height: h)
+        case .center:      return NSRect(x: f.midX - w / 2, y: f.midY - h / 2,  width: w, height: h)
+        case .bottomRight: return NSRect(x: f.maxX - w,     y: f.minY + 8,      width: w, height: h)
+        }
+    }
+
+    /// 이미 떠 있는 창(anchor) 곁에 쌓이는 위치 — 상단/중앙 배치는 아래로, 우하단 배치는 위로.
+    private func stackedFrame(anchor: NSRect, w: CGFloat, h: CGFloat, in f: NSRect, position: ToastPosition) -> NSRect {
+        switch position {
+        case .topCenter, .center:
+            return NSRect(x: f.midX - w / 2, y: anchor.minY - h + Self.stackOverlap, width: w, height: h)
+        case .bottomRight:
+            return NSRect(x: f.maxX - w, y: anchor.maxY - Self.stackOverlap, width: w, height: h)
         }
     }
 
@@ -227,7 +264,7 @@ final class OverlayController {
             var spec = ToastSpec(cut: "done", emoji: "☕", title: title, subtitle: subtitle)
             if stop {
                 spec.buttonLabel = "오늘은 그만"
-                spec.buttonAction = { [weak self] in self?.engine.quietForToday(); self?.hideToast() }
+                spec.buttonAction = { [weak self] in self?.engine.quietForToday(); self?.hideAllToasts() }
             }
             return (spec, title)
 
@@ -236,24 +273,63 @@ final class OverlayController {
         }
     }
 
-    func hideToast() {
-        toastTimer?.invalidate()
-        toastTimer = nil
-        currentNotice = nil
-        guard let win = toastWindow else { return }
-        toastWindow = nil
+    /// 특정 토스트를 내린다 (X 버튼·소멸 타이머·교체). 남은 카드는 기준 위치로 미끄러진다.
+    private func hide(_ window: NSWindow?) {
+        guard let window, let idx = toasts.firstIndex(where: { $0.window === window }) else { return }
+        toasts[idx].timer?.invalidate()
+        toasts.remove(at: idx)
+        fadeOut(window)
+        restack()
+    }
+
+    /// 모든 토스트를 내린다 ("오늘은 그만" 버튼 등).
+    func hideAllToasts() {
+        for t in toasts {
+            t.timer?.invalidate()
+            fadeOut(t.window)
+        }
+        toasts.removeAll()
+    }
+
+    private func fadeOut(_ win: NSWindow) {
         NSAnimationContext.runAnimationGroup({ ctx in
             ctx.duration = 0.3
             win.animator().alphaValue = 0
         }, completionHandler: { win.orderOut(nil) })
     }
 
-    /// 개발용(FIKA_TEST_TOAST): 현재 토스트 창을 PNG로 저장 — 화면 캡처 권한 없이 시각 확인.
+    /// 남은 토스트를 기준 위치로 이동. 같은 크기의 "이동"만 한다 —
+    /// 표시 후 리사이즈는 macOS 26 크래시 함정이라 절대 안 한다.
+    private func restack() {
+        guard let first = toasts.first, let f = first.window.screen?.visibleFrame else { return }
+        let size = first.window.frame.size
+        let target = primaryFrame(w: size.width, h: size.height, in: f, position: engine.settings.timeNoticePosition)
+        guard target != first.window.frame else { return }
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = 0.25
+            first.window.animator().setFrame(target, display: true)
+        }
+    }
+
+    /// 개발용(FIKA_TEST_TOAST): 떠 있는 토스트 창(들)을 하나의 PNG로 저장 — 화면 캡처 권한 없이 시각 확인.
     func snapshotToast(to path: String) {
-        guard let view = toastWindow?.contentView,
-              let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
-        view.cacheDisplay(in: view.bounds, to: rep)
-        try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
+        guard !toasts.isEmpty else { return }
+        let frames = toasts.map(\.window.frame)
+        let union = frames.dropFirst().reduce(frames[0]) { $0.union($1) }
+        let img = NSImage(size: union.size)
+        img.lockFocus()
+        for t in toasts {
+            guard let v = t.window.contentView,
+                  let rep = v.bitmapImageRepForCachingDisplay(in: v.bounds) else { continue }
+            v.cacheDisplay(in: v.bounds, to: rep)
+            rep.draw(in: NSRect(x: t.window.frame.minX - union.minX,
+                                y: t.window.frame.minY - union.minY,
+                                width: t.window.frame.width, height: t.window.frame.height))
+        }
+        img.unlockFocus()
+        guard let tiff = img.tiffRepresentation, let outRep = NSBitmapImageRep(data: tiff),
+              let png = outRep.representation(using: .png, properties: [:]) else { return }
+        try? png.write(to: URL(fileURLWithPath: path))
     }
 
     // MARK: - 메뉴바 호버 팁 (시간 감춤 상태에서 아이콘에 마우스 올리면)

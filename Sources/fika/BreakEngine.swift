@@ -678,11 +678,11 @@ final class BreakEngine: ObservableObject {
         case "shutdownStop": overlay.post(.shutdown(title: "오늘 일은 여기까지예요 ☕",
                                                     subtitle: "오늘 7회 · 3시간 42분 집중했어요. 수고했어요", stop: true))
         case "rest":         overlay.post(.scheduledRest(title: "점심", subtitle: "13:00까지 쉬어요", entering: true))
-        case "collision":    // 케이스 A 재현: 마무리 도래 표시 중 동작 알림 발화 → 동작은 대기해야 함
+        case "collision":    // 겹침 재현: 마무리 도래 표시 중 동작 알림 발화 → 아래에 스택되어야 정상
             overlay.post(.shutdown(title: "오늘 일은 여기까지예요 ☕",
                                    subtitle: "오늘 7회 · 3시간 42분 집중했어요. 수고했어요", stop: true))
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
-                self?.overlay.post(.stretch(tip: "이 동작 알림은 마무리가 끝난 뒤 떠야 정상"))
+                self?.overlay.post(.stretch(tip: "이 동작 알림은 마무리 아래에 스택되어야 정상"))
             }
         default:             Log.event("FIKA_TEST_TOAST 알 수 없는 종류: \(name)")
         }
