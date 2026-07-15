@@ -205,6 +205,7 @@ final class BreakEngine: ObservableObject {
         // (아래 paused 가드나 handleScheduledRest return에 걸리면 그날 마무리 알림을 통째로 놓쳤음)
         handleShutdown()
         handleQuietForTodayResume()   // "오늘은 그만" 후 다음날 복귀 시 자동 재개(A-4)
+        overlay.flushPending()        // 대기 중인 토스트 표시/만료 처리 (일시정지·고정 휴식 중에도)
         guard phase != .paused else { return }
         if handleScheduledRest() { return }   // 고정 휴식 시간대면 평소 로직을 건너뛴다
         if settings.idleResetEnabled {
@@ -248,7 +249,7 @@ final class BreakEngine: ObservableObject {
         restPrealertFired = true
         let label = settings.scheduledRestLabel.isEmpty ? "예약 휴식" : settings.scheduledRestLabel
         let mins = max(1, Int((until / 60).rounded(.up)))
-        overlay.post(.scheduledRest(title: "곧 \(label)이에요", subtitle: "\(mins)분 뒤 시작해요"))
+        overlay.post(.scheduledRest(title: "곧 \(label)이에요", subtitle: "\(mins)분 뒤 시작해요", entering: false))
         Log.event("예약 휴식 사전 예고 (\(mins)분 전)")
     }
 
@@ -350,7 +351,7 @@ final class BreakEngine: ObservableObject {
         overlay.hideWarning()
         let label = settings.scheduledRestLabel.isEmpty ? "예약 휴식" : settings.scheduledRestLabel
         let endStr = String(format: "%02d:%02d", (settings.scheduledRestEnd / 60) % 24, settings.scheduledRestEnd % 60)
-        overlay.post(.scheduledRest(title: label, subtitle: "\(endStr)까지 쉬어요"))
+        overlay.post(.scheduledRest(title: label, subtitle: "\(endStr)까지 쉬어요", entering: true))
         refreshPresentation()                                          // 화면은 덮지 않음(가벼운 모드)
         Log.event("예약 휴식 진입 (\(settings.scheduledRestLabel))")
     }
@@ -391,8 +392,7 @@ final class BreakEngine: ObservableObject {
         let period = settings.timeNoticeMinutes * 60
         guard period > 0, timeNoticeBucket >= 1 else { return }
         guard remaining <= Double(timeNoticeBucket) * period else { return }   // 다음 정렬 지점 도달 전
-        if overlay.isToastVisible { return }                                   // 겹침 방지: 양보(버킷 유지, 다음 틱 재시도)
-        overlay.post(.timeNotice(final: false))
+        overlay.post(.timeNotice(final: false))   // 겹침 처리(교체/대기/폐기)는 post()의 정책이 담당
         // 다음 목표로 한 단계. 슬립 복귀 등으로 여러 경계를 건너뛰었으면 따라잡되 토스트는 한 번만.
         var k = timeNoticeBucket - 1
         while k >= 1, remaining <= Double(k) * period { k -= 1 }
@@ -405,7 +405,6 @@ final class BreakEngine: ObservableObject {
     private func handleFinalTimeNotice() {
         guard settings.timeNoticeEnabled, phase == .working, !isAway else { return }
         guard !timeNoticeFinalFired, remaining > 0, remaining <= 30 else { return }   // 휴식 30초 전 한 번
-        if overlay.isToastVisible { return }                                          // 겹침 방지: 다음 틱 재시도
         overlay.post(.timeNotice(final: true))
         timeNoticeFinalFired = true
         Log.debug("남은 시간 알림: 곧 휴식(마지막)")
@@ -678,7 +677,13 @@ final class BreakEngine: ObservableObject {
                                                     subtitle: "18:00에 마쳐요. 슬슬 준비하세요", stop: false))
         case "shutdownStop": overlay.post(.shutdown(title: "오늘 일은 여기까지예요 ☕",
                                                     subtitle: "오늘 7회 · 3시간 42분 집중했어요. 수고했어요", stop: true))
-        case "rest":         overlay.post(.scheduledRest(title: "점심", subtitle: "13:00까지 쉬어요"))
+        case "rest":         overlay.post(.scheduledRest(title: "점심", subtitle: "13:00까지 쉬어요", entering: true))
+        case "collision":    // 케이스 A 재현: 마무리 도래 표시 중 동작 알림 발화 → 동작은 대기해야 함
+            overlay.post(.shutdown(title: "오늘 일은 여기까지예요 ☕",
+                                   subtitle: "오늘 7회 · 3시간 42분 집중했어요. 수고했어요", stop: true))
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
+                self?.overlay.post(.stretch(tip: "이 동작 알림은 마무리가 끝난 뒤 떠야 정상"))
+            }
         default:             Log.event("FIKA_TEST_TOAST 알 수 없는 종류: \(name)")
         }
     }

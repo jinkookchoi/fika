@@ -36,6 +36,26 @@ eq(ScheduleMath.dueShutdownStages(nowMinutes: 1051, shutdownTime: 1080, fired: [
 eq(ScheduleMath.dueShutdownStages(nowMinutes: 1052, shutdownTime: 1080, fired: []), [], "grace 지나면 없음")
 eq(ScheduleMath.dueShutdownStages(nowMinutes: 1050, shutdownTime: 1080, fired: [30]), [], "이미 쏜 단계 제외")
 
+print("\nNoticePolicy.decide (우선순위: 1=마무리 도래 … 6=동작, 7=남은시간 정기)")
+eq(NoticePolicy.decide(newPriority: 6, warningHold: false, currentPriority: nil), .show,
+   "슬롯 비었으면 즉시 표시")
+eq(NoticePolicy.decide(newPriority: 1, warningHold: false, currentPriority: 6), .replace,
+   "케이스 A: 마무리 도래가 동작 알림을 교체")
+eq(NoticePolicy.decide(newPriority: 6, warningHold: false, currentPriority: 1), .wait,
+   "케이스 A 역: 동작 알림은 마무리 도래를 못 밀어냄(대기)")
+eq(NoticePolicy.decide(newPriority: 7, warningHold: false, currentPriority: 6), .wait,
+   "케이스 B: 남은시간 정기는 동작 알림에 양보")
+eq(NoticePolicy.decide(newPriority: 4, warningHold: true, currentPriority: nil), .wait,
+   "케이스 C: 예고 배너 중 마무리 30분 전은 보류")
+eq(NoticePolicy.decide(newPriority: 6, warningHold: false, currentPriority: 6), .wait,
+   "같은 우선순위끼리는 먼저 뜬 쪽 유지")
+
+print("\nNoticePolicy.shouldReplacePending")
+eq(NoticePolicy.shouldReplacePending(newPriority: 6, pendingPriority: nil), true, "대기 비었으면 채움")
+eq(NoticePolicy.shouldReplacePending(newPriority: 1, pendingPriority: 6), true, "더 급하면 대기건 교체")
+eq(NoticePolicy.shouldReplacePending(newPriority: 6, pendingPriority: 1), false, "덜 급하면 폐기")
+eq(NoticePolicy.shouldReplacePending(newPriority: 7, pendingPriority: 7), true, "같으면 최신이 이김(문구 갱신)")
+
 print("")
 if failures == 0 {
     print("✅ 모든 테스트 통과")

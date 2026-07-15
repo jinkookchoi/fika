@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import FikaCore
 
 /// 휴식 오버레이와 예고 배너 윈도우의 생성/소멸을 담당.
 @MainActor
@@ -94,10 +95,52 @@ final class OverlayController {
 
     // MARK: - 토스트 알림 (잠깐 떴다 사라지는 알림 — 단일 진입점)
 
+    /// 지금 떠 있는 토스트의 Notice (우선순위 비교용).
+    private var currentNotice: Notice?
+    /// 대기 1건: 슬롯이 비면 표시하고, 유효기한이 지나면 조용히 폐기.
+    private var pending: (notice: Notice, expires: Date)?
+
     /// 모든 토스트 알림의 단일 진입점. 발화처(BreakEngine)는 Notice만 만들고,
-    /// 표시(ToastView 템플릿·창 실측·로그 기록·소리)는 전부 여기서 처리한다.
-    /// 겹침은 기존과 동일하게 "떠 있던 토스트를 내리고 즉시 표시" — 우선순위/대기 정책은 커밋 ③에서.
+    /// 표시(ToastView 템플릿·창 실측·로그 기록·소리)와 겹침 정책(교체/대기/폐기)을 여기서 처리한다.
     func post(_ notice: Notice) {
+        let decision = NoticePolicy.decide(
+            newPriority: notice.priority,
+            warningHold: engine.isWarning && notice.waitsDuringWarning,
+            currentPriority: currentNotice?.priority)
+        switch decision {
+        case .show, .replace:
+            display(notice)   // 교체로 밀려난 토스트는 폐기(일부는 이미 보였으므로 재대기 안 함)
+        case .wait:
+            if NoticePolicy.shouldReplacePending(newPriority: notice.priority,
+                                                 pendingPriority: pending?.notice.priority) {
+                pending = (notice, Date().addingTimeInterval(notice.validity))
+                Log.debug("토스트 대기 (\(notice.logCategory))")
+            } else {
+                Log.debug("토스트 폐기 — 더 급한 대기건 있음 (\(notice.logCategory))")
+            }
+        }
+    }
+
+    /// 대기 중인 토스트를 표시할 수 있으면 표시한다. 엔진 tick(1초)마다 호출.
+    func flushPending() {
+        guard toastWindow == nil, let p = pending else { return }
+        if Date() > p.expires {
+            pending = nil
+            Log.debug("대기 토스트 만료 폐기 (\(p.notice.logCategory))")
+            return
+        }
+        if p.notice.requiresWorkingPhase && engine.phase != .working {
+            pending = nil
+            Log.debug("대기 토스트 폐기 — 작업 단계 아님 (\(p.notice.logCategory))")
+            return
+        }
+        if engine.isWarning && p.notice.waitsDuringWarning { return }   // 예고 끝날 때까지 계속 대기
+        pending = nil
+        display(p.notice)
+    }
+
+    /// 토스트를 실제로 화면에 올린다 (창 실측·로그·소리·타이머).
+    private func display(_ notice: Notice) {
         hideToast()
         guard let screen = activeScreen else { return }
         let s = engine.settings
@@ -131,6 +174,7 @@ final class OverlayController {
         setHosted(win, view.frame(maxWidth: .infinity, maxHeight: .infinity))
         win.orderFront(nil)
         toastWindow = win
+        currentNotice = notice
 
         NotificationLog.shared.record(notice.logCategory, logMessage)
         if case .timeNotice = notice { Sound.playNotice(s.timeNoticeSound) }
@@ -187,7 +231,7 @@ final class OverlayController {
             }
             return (spec, title)
 
-        case .scheduledRest(let title, let subtitle):
+        case .scheduledRest(let title, let subtitle, _):
             return (ToastSpec(cut: "resting", emoji: "☕", title: title, subtitle: subtitle), title)
         }
     }
@@ -195,6 +239,7 @@ final class OverlayController {
     func hideToast() {
         toastTimer?.invalidate()
         toastTimer = nil
+        currentNotice = nil
         guard let win = toastWindow else { return }
         toastWindow = nil
         NSAnimationContext.runAnimationGroup({ ctx in
@@ -202,9 +247,6 @@ final class OverlayController {
             win.animator().alphaValue = 0
         }, completionHandler: { win.orderOut(nil) })
     }
-
-    /// 토스트가 지금 떠 있는지. (서로 겹치지 않게 양보 판단용)
-    var isToastVisible: Bool { toastWindow != nil }
 
     /// 개발용(FIKA_TEST_TOAST): 현재 토스트 창을 PNG로 저장 — 화면 캡처 권한 없이 시각 확인.
     func snapshotToast(to path: String) {
