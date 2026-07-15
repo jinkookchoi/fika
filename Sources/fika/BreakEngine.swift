@@ -248,7 +248,7 @@ final class BreakEngine: ObservableObject {
         restPrealertFired = true
         let label = settings.scheduledRestLabel.isEmpty ? "예약 휴식" : settings.scheduledRestLabel
         let mins = max(1, Int((until / 60).rounded(.up)))
-        overlay.showScheduledRestToast(title: "곧 \(label)이에요", subtitle: "\(mins)분 뒤 시작해요")
+        overlay.post(.scheduledRest(title: "곧 \(label)이에요", subtitle: "\(mins)분 뒤 시작해요"))
         Log.event("예약 휴식 사전 예고 (\(mins)분 전)")
     }
 
@@ -275,16 +275,16 @@ final class BreakEngine: ObservableObject {
         let timeStr = String(format: "%02d:%02d", h, mm)
         switch offset {
         case 30:
-            overlay.showShutdownToast(title: "오늘 일 마무리 30분 전이에요",
-                                      subtitle: "\(timeStr)에 마쳐요. 슬슬 준비하세요", stop: false)
+            overlay.post(.shutdown(title: "오늘 일 마무리 30분 전이에요",
+                                   subtitle: "\(timeStr)에 마쳐요. 슬슬 준비하세요", stop: false))
         case 15:
-            overlay.showShutdownToast(title: "오늘 일 마무리 15분 전이에요",
-                                      subtitle: "\(timeStr)에 마쳐요. 하던 걸 정리하세요", stop: false)
+            overlay.post(.shutdown(title: "오늘 일 마무리 15분 전이에요",
+                                   subtitle: "\(timeStr)에 마쳐요. 하던 걸 정리하세요", stop: false))
         default:
             let t = SessionStore.shared.today
-            overlay.showShutdownToast(title: "오늘 일은 여기까지예요 ☕",
-                                      subtitle: "오늘 \(t.sessions)회 · \(SessionStore.hm(t.minutes)) 집중했어요. 수고했어요",
-                                      stop: true)
+            overlay.post(.shutdown(title: "오늘 일은 여기까지예요 ☕",
+                                   subtitle: "오늘 \(t.sessions)회 · \(SessionStore.hm(t.minutes)) 집중했어요. 수고했어요",
+                                   stop: true))
         }
     }
 
@@ -307,7 +307,7 @@ final class BreakEngine: ObservableObject {
         guard SystemIdle.seconds() < 60 else { return }
         quietDay = nil
         startWork()                                   // 새 날 → 작업 사이클을 새로 시작(일시정지 해제)
-        overlay.showStartToast()
+        overlay.post(.start)
         Log.event("오늘은 그만 → 다음날 복귀 감지, 자동 재개")
     }
 
@@ -350,7 +350,7 @@ final class BreakEngine: ObservableObject {
         overlay.hideWarning()
         let label = settings.scheduledRestLabel.isEmpty ? "예약 휴식" : settings.scheduledRestLabel
         let endStr = String(format: "%02d:%02d", (settings.scheduledRestEnd / 60) % 24, settings.scheduledRestEnd % 60)
-        overlay.showScheduledRestToast(title: label, subtitle: "\(endStr)까지 쉬어요")
+        overlay.post(.scheduledRest(title: label, subtitle: "\(endStr)까지 쉬어요"))
         refreshPresentation()                                          // 화면은 덮지 않음(가벼운 모드)
         Log.event("예약 휴식 진입 (\(settings.scheduledRestLabel))")
     }
@@ -375,7 +375,7 @@ final class BreakEngine: ObservableObject {
         guard settings.microBreakEnabled, phase == .working, !isAway, !isWarning else { return }
         if Date() >= nextMicroBreak {
             if let tip = settings.stretchTips.randomElement(), !tip.isEmpty {
-                overlay.showStretchToast(tip)
+                overlay.post(.stretch(tip: tip))
                 Log.debug("마이크로 브레이크: \(tip)")
             }
             nextMicroBreak = Date().addingTimeInterval(settings.microBreakMinutes * 60)
@@ -392,7 +392,7 @@ final class BreakEngine: ObservableObject {
         guard period > 0, timeNoticeBucket >= 1 else { return }
         guard remaining <= Double(timeNoticeBucket) * period else { return }   // 다음 정렬 지점 도달 전
         if overlay.isToastVisible { return }                                   // 겹침 방지: 양보(버킷 유지, 다음 틱 재시도)
-        overlay.showTimeNotice()
+        overlay.post(.timeNotice(final: false))
         // 다음 목표로 한 단계. 슬립 복귀 등으로 여러 경계를 건너뛰었으면 따라잡되 토스트는 한 번만.
         var k = timeNoticeBucket - 1
         while k >= 1, remaining <= Double(k) * period { k -= 1 }
@@ -406,7 +406,7 @@ final class BreakEngine: ObservableObject {
         guard settings.timeNoticeEnabled, phase == .working, !isAway else { return }
         guard !timeNoticeFinalFired, remaining > 0, remaining <= 30 else { return }   // 휴식 30초 전 한 번
         if overlay.isToastVisible { return }                                          // 겹침 방지: 다음 틱 재시도
-        overlay.showTimeNotice(final: true)
+        overlay.post(.timeNotice(final: true))
         timeNoticeFinalFired = true
         Log.debug("남은 시간 알림: 곧 휴식(마지막)")
     }
@@ -536,7 +536,7 @@ final class BreakEngine: ObservableObject {
     private func startWorkFromBreak() {
         startWork()
         refreshPresentation()      // 휴식 오버레이 내림
-        overlay.showStartToast()
+        overlay.post(.start)
     }
 
     private func enterBreak() {
@@ -663,10 +663,10 @@ final class BreakEngine: ObservableObject {
 
     func testStretchAlert() {
         let tip = settings.stretchTips.filter { !$0.isEmpty }.randomElement() ?? "발목을 위아래로 까딱까딱 (혈액순환!)"
-        overlay.showStretchToast(tip)
+        overlay.post(.stretch(tip: tip))
     }
-    func testTimeNoticeAlert() { overlay.showTimeNotice() }
+    func testTimeNoticeAlert() { overlay.post(.timeNotice(final: false)) }
     func testShutdownAlert() {
-        overlay.showShutdownToast(title: "오늘 일은 여기까지예요 ☕", subtitle: "테스트 알림이에요", stop: false)
+        overlay.post(.shutdown(title: "오늘 일은 여기까지예요 ☕", subtitle: "테스트 알림이에요", stop: false))
     }
 }

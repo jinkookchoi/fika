@@ -92,26 +92,77 @@ final class OverlayController {
         warningWindow = nil
     }
 
-    // MARK: - 작업 시작 토스트 (잠깐 떴다 사라지는 알림)
+    // MARK: - 토스트 알림 (잠깐 떴다 사라지는 알림 — 단일 진입점)
 
-    func showStartToast() {
-        hideStartToast()
+    /// 모든 토스트 알림의 단일 진입점. 발화처(BreakEngine)는 Notice만 만들고,
+    /// 창 생성·표시 시간·로그 기록·소리는 전부 여기서 처리한다.
+    /// 겹침은 기존과 동일하게 "떠 있던 토스트를 내리고 즉시 표시" — 우선순위/대기 정책은 커밋 ③에서.
+    func post(_ notice: Notice) {
+        hideToast()
         guard let screen = activeScreen else { return }
-        let w: CGFloat = 520, h: CGFloat = 140   // 토스트 + 글로우 여백
+        let s = engine.settings
         let f = screen.visibleFrame
-        let rect = NSRect(x: f.midX - w / 2, y: f.maxY - h - 16, width: w, height: h)
-        let win = makeWindow(frame: rect, level: .statusBar, passThrough: false)
-        setHosted(win, StartToastView(engine: engine, onClose: { [weak self] in self?.hideStartToast() }))
+
+        // 종류별 뷰·창 크기·위치·로그 문구. (뷰는 커밋 ②에서 ToastView 한 벌로 통일 예정)
+        let view: AnyView
+        let w: CGFloat, h: CGFloat
+        var rect: NSRect? = nil            // nil이면 기본 위치(상단 중앙)
+        let logMessage: String
+
+        switch notice {
+        case .start:
+            (w, h) = (520, 140)            // 토스트(최대 440) + 글로우 여백
+            view = AnyView(StartToastView(engine: engine, onClose: { [weak self] in self?.hideToast() }))
+            logMessage = "이제 시작해볼까요?"
+
+        case .stretch(let tip):
+            (w, h) = (520, 140)
+            view = AnyView(StretchToastView(text: tip, onClose: { [weak self] in self?.hideToast() }))
+            logMessage = tip
+
+        case .timeNotice(let final):
+            let big = s.timeNoticeBig
+            (w, h) = big ? (560, 156) : (520, 140)
+            switch s.timeNoticePosition {
+            case .topCenter:   break       // 기본 위치
+            case .center:      rect = NSRect(x: f.midX - w / 2, y: f.midY - h / 2, width: w, height: h)
+            case .bottomRight: rect = NSRect(x: f.maxX - w,     y: f.minY + 8,     width: w, height: h)
+            }
+            view = AnyView(TimeNoticeToastView(engine: engine, isFinal: final, onClose: { [weak self] in self?.hideToast() }))
+            logMessage = final ? "곧 휴식이에요" : "휴식까지 \(engine.remainingMinutesRounded)분 남았어요"
+
+        case .shutdown(let title, let subtitle, let stop):
+            (w, h) = (520, 150)
+            view = AnyView(ShutdownToastView(
+                title: title, subtitle: subtitle, showStop: stop,
+                onStop: { [weak self] in self?.engine.quietForToday(); self?.hideToast() },
+                onClose: { [weak self] in self?.hideToast() }))
+            logMessage = title
+
+        case .scheduledRest(let title, let subtitle):
+            (w, h) = (520, 140)
+            view = AnyView(ScheduledRestToastView(title: title, subtitle: subtitle,
+                                                  onClose: { [weak self] in self?.hideToast() }))
+            logMessage = title
+        }
+
+        let frame = rect ?? NSRect(x: f.midX - w / 2, y: f.maxY - h - 16, width: w, height: h)
+        let win = makeWindow(frame: frame, level: .statusBar, passThrough: false)
+        setHosted(win, view)
         win.orderFront(nil)
         toastWindow = win
-        NotificationLog.shared.record("시작", "이제 시작해볼까요?")
-        Log.debug("작업 시작 토스트 표시")
-        toastTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: false) { [weak self] _ in
-            Task { @MainActor in self?.hideStartToast() }
+
+        NotificationLog.shared.record(notice.logCategory, logMessage)
+        if case .timeNotice = notice { Sound.playNotice(s.timeNoticeSound) }
+        Log.debug("토스트 표시 (\(notice.logCategory))")
+
+        let duration = notice.duration ?? max(2, s.timeNoticeDuration)
+        toastTimer = Timer.scheduledTimer(withTimeInterval: duration, repeats: false) { [weak self] _ in
+            Task { @MainActor in self?.hideToast() }
         }
     }
 
-    func hideStartToast() {
+    func hideToast() {
         toastTimer?.invalidate()
         toastTimer = nil
         guard let win = toastWindow else { return }
@@ -122,88 +173,8 @@ final class OverlayController {
         }, completionHandler: { win.orderOut(nil) })
     }
 
-    /// 작업 중 마이크로 브레이크 동작 알림. (클릭 통과, 잠깐 떴다 사라짐)
-    func showStretchToast(_ text: String) {
-        hideStartToast()
-        guard let screen = activeScreen else { return }
-        let w: CGFloat = 520, h: CGFloat = 140   // 토스트(최대 440) + 글로우 여백
-        let f = screen.visibleFrame
-        let rect = NSRect(x: f.midX - w / 2, y: f.maxY - h - 16, width: w, height: h)
-        let win = makeWindow(frame: rect, level: .statusBar, passThrough: false)
-        setHosted(win, StretchToastView(text: text, onClose: { [weak self] in self?.hideStartToast() }))
-        win.orderFront(nil)
-        toastWindow = win
-        NotificationLog.shared.record("동작", text)
-        toastTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: false) { [weak self] _ in
-            Task { @MainActor in self?.hideStartToast() }
-        }
-    }
-
-    /// 토스트(시작/동작/시간 알림)가 지금 떠 있는지. (서로 겹치지 않게 양보 판단용)
+    /// 토스트가 지금 떠 있는지. (서로 겹치지 않게 양보 판단용)
     var isToastVisible: Bool { toastWindow != nil }
-
-    /// 하루 마무리 알림 토스트. `stop`이면 "오늘은 그만(일시정지)" 버튼 포함 + 더 오래 떠 있음.
-    func showShutdownToast(title: String, subtitle: String, stop: Bool) {
-        hideStartToast()
-        guard let screen = activeScreen else { return }
-        let w: CGFloat = 520, h: CGFloat = 150
-        let f = screen.visibleFrame
-        let rect = NSRect(x: f.midX - w / 2, y: f.maxY - h - 16, width: w, height: h)
-        let win = makeWindow(frame: rect, level: .statusBar, passThrough: false)
-        setHosted(win, ShutdownToastView(
-            title: title, subtitle: subtitle, showStop: stop,
-            onStop: { [weak self] in self?.engine.quietForToday(); self?.hideStartToast() },
-            onClose: { [weak self] in self?.hideStartToast() }))
-        win.orderFront(nil)
-        toastWindow = win
-        NotificationLog.shared.record("마무리", title)
-        toastTimer = Timer.scheduledTimer(withTimeInterval: stop ? 12 : 6, repeats: false) { [weak self] _ in
-            Task { @MainActor in self?.hideStartToast() }
-        }
-    }
-
-    /// 고정 휴식 시간대 진입/사전 예고 토스트.
-    func showScheduledRestToast(title: String, subtitle: String) {
-        hideStartToast()
-        guard let screen = activeScreen else { return }
-        let w: CGFloat = 520, h: CGFloat = 140
-        let f = screen.visibleFrame
-        let rect = NSRect(x: f.midX - w / 2, y: f.maxY - h - 16, width: w, height: h)
-        let win = makeWindow(frame: rect, level: .statusBar, passThrough: false)
-        setHosted(win, ScheduledRestToastView(title: title, subtitle: subtitle,
-                                              onClose: { [weak self] in self?.hideStartToast() }))
-        win.orderFront(nil)
-        toastWindow = win
-        NotificationLog.shared.record("고정휴식", title)
-        toastTimer = Timer.scheduledTimer(withTimeInterval: 6, repeats: false) { [weak self] _ in
-            Task { @MainActor in self?.hideStartToast() }
-        }
-    }
-
-    /// 작업 중 주기적 "휴식까지 N분 남았어요" 알림. 동작 알림과 같은 슬롯을 쓴다(겹침 방지).
-    func showTimeNotice(final: Bool = false) {
-        hideStartToast()
-        guard let screen = activeScreen else { return }
-        let s = engine.settings
-        let big = s.timeNoticeBig
-        let w: CGFloat = big ? 560 : 520, h: CGFloat = big ? 156 : 140   // 토스트 + 글로우 여백
-        let f = screen.visibleFrame
-        let rect: NSRect
-        switch s.timeNoticePosition {
-        case .topCenter:   rect = NSRect(x: f.midX - w / 2, y: f.maxY - h - 16, width: w, height: h)
-        case .center:      rect = NSRect(x: f.midX - w / 2, y: f.midY - h / 2,  width: w, height: h)
-        case .bottomRight: rect = NSRect(x: f.maxX - w,     y: f.minY + 8,      width: w, height: h)
-        }
-        let win = makeWindow(frame: rect, level: .statusBar, passThrough: false)
-        setHosted(win, TimeNoticeToastView(engine: engine, isFinal: final, onClose: { [weak self] in self?.hideStartToast() }))
-        win.orderFront(nil)
-        toastWindow = win
-        NotificationLog.shared.record("남은시간", final ? "곧 휴식이에요" : "휴식까지 \(engine.remainingMinutesRounded)분 남았어요")
-        Sound.playNotice(s.timeNoticeSound)
-        toastTimer = Timer.scheduledTimer(withTimeInterval: max(2, s.timeNoticeDuration), repeats: false) { [weak self] _ in
-            Task { @MainActor in self?.hideStartToast() }
-        }
-    }
 
     // MARK: - 메뉴바 호버 팁 (시간 감춤 상태에서 아이콘에 마우스 올리면)
 
