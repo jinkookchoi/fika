@@ -2,31 +2,31 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleName</key>
-    <string>Fika</string>
-    <key>CFBundleDisplayName</key>
-    <string>Fika</string>
-    <key>CFBundleIdentifier</key>
-    <string>com.jinkookchoi.fika</string>
-    <key>CFBundleVersion</key>
-    <string>16</string>
-    <key>CFBundleShortVersionString</key>
-    <string>1.15</string>
-    <key>CFBundleExecutable</key>
-    <string>Fika</string>
-    <key>CFBundleIconFile</key>
-    <string>AppIcon</string>
-    <key>NSHumanReadableCopyright</key>
-    <string>© 2026 Jinkook Choi</string>
-    <key>CFBundlePackageType</key>
-    <string>APPL</string>
-    <key>NSPrincipalClass</key>
-    <string>NSApplication</string>
-    <key>NSHighResolutionCapable</key>
-    <true/>
-    <key>LSMinimumSystemVersion</key>
-    <string>14.0</string>
-    <key>LSUIElement</key>
-    <true/>
+	<key>CFBundleDisplayName</key>
+	<string>Fika</string>
+	<key>CFBundleExecutable</key>
+	<string>Fika</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.jinkookchoi.fika</string>
+	<key>CFBundleName</key>
+	<string>Fika</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.16</string>
+	<key>CFBundleVersion</key>
+	<string>16</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSHumanReadableCopyright</key>
+	<string>© 2026 Jinkook Choi</string>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
 </dict>
 </plist>
