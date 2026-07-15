@@ -69,6 +69,15 @@ final class BreakEngine: ObservableObject {
     private var scheduledRestSkipped = false
     private lazy var overlay = OverlayController(engine: self)
 
+    /// 개발용(FIKA_TIME_SCALE): 시간 압축 배율. N이면 작업/휴식/알림 카운트다운이 N배 빨리 흐른다 —
+    /// 실제 엔진·알림 경로 그대로의 e2e를 몇 분 안에 경험하기 위한 모드.
+    /// wall-clock 기반(하루 마무리·고정 휴식)은 압축되지 않고, 압축 중엔 집중 세션을 기록하지 않는다.
+    private let timeScale: Double = {
+        guard let raw = ProcessInfo.processInfo.environment["FIKA_TIME_SCALE"],
+              let v = Double(raw), v > 1 else { return 1 }
+        return min(v, 60)
+    }()
+
     /// 메뉴바 호버 팁 표시/숨김 (AppDelegate 의 트래킹에서 호출).
     func showMenuHoverTip(near anchor: NSRect) { overlay.showHoverTip(near: anchor) }
     func hideMenuHoverTip() { overlay.hideHoverTip() }
@@ -78,6 +87,7 @@ final class BreakEngine: ObservableObject {
         startWork()
         startTimer()
         observeSleepWake()
+        if timeScale > 1 { Log.event("⏩ 시간 압축 모드 \(Int(timeScale))× (개발용 — 세션 기록 안 함)") }
     }
 
     /// 알림 주기 설정(남은시간/동작)이 세션 도중 바뀌면 현재 작업 세션의 스케줄을 새 값에 맞춰 재정렬한다(A-7).
@@ -217,6 +227,10 @@ final class BreakEngine: ObservableObject {
             handleBreakHold()
             refreshPresentation()
             return
+        }
+        if timeScale > 1 {   // 개발용 시간 압축: 매 초 (배율-1)초를 추가로 흘려보낸다
+            phaseEnd = phaseEnd.addingTimeInterval(-(timeScale - 1))
+            nextMicroBreak = nextMicroBreak.addingTimeInterval(-(timeScale - 1))
         }
         remaining = max(0, phaseEnd.timeIntervalSinceNow)
         if phase == .working && !isAway { workedSeconds += 1 }   // 실제 집중 시간 누적(자리비움 제외)
@@ -543,7 +557,7 @@ final class BreakEngine: ObservableObject {
         // 60초 미만(수동 "지금 휴식"·시작 직후 등)은 가짜 세션이므로 기록·카운트 제외.
         let focus = workedSeconds
         workedSeconds = 0
-        if focus >= 60 {
+        if focus >= 60 && timeScale == 1 {   // 시간 압축(개발용) 중엔 가짜 세션을 기록하지 않는다
             SessionStore.shared.record(minutes: focus / 60, at: Date())
             completedWork += 1
         }
@@ -678,6 +692,16 @@ final class BreakEngine: ObservableObject {
         case "shutdownStop": overlay.post(.shutdown(title: "오늘 일은 여기까지예요 ☕",
                                                     subtitle: "오늘 7회 · 3시간 42분 집중했어요. 수고했어요", stop: true))
         case "rest":         overlay.post(.scheduledRest(title: "점심", subtitle: "13:00까지 쉬어요", entering: true))
+        case "warningStack": // 예고 배너 + "곧 휴식" 최종 알림: 토스트가 배너 아래에 앉아야 정상
+            setTimeUntilBreak(0.9)   // 남은 54초 → 예고 구간 진입(배너는 다음 tick에 뜸)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+                self?.overlay.post(.timeNotice(final: true))
+            }
+        case "lifecycle":    // 스택 전체 시퀀스: A 표시 → B 아래 스택 → A 소멸(B 슬라이드 업) → B 소멸
+            overlay.post(.scheduledRest(title: "A — 먼저 뜸 (6초 뒤 사라짐)", subtitle: "사라지면 B가 올라와요", entering: false))
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+                self?.overlay.post(.stretch(tip: "B — 아래에 스택 (A 소멸 후 위로, 10초 뒤 소멸)"))
+            }
         case "collision":    // 겹침 재현: 마무리 도래 표시 중 동작 알림 발화 → 아래에 스택되어야 정상
             overlay.post(.shutdown(title: "오늘 일은 여기까지예요 ☕",
                                    subtitle: "오늘 7회 · 3시간 42분 집중했어요. 수고했어요", stop: true))
