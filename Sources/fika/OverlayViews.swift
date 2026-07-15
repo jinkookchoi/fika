@@ -173,10 +173,9 @@ struct ToastView: View {
     var body: some View {
         HStack(spacing: 11) {
             if let cut = MascotCut.image(spec.cut) {
-                // 강조 모드(heroNumber)에선 글자 대신 마스코트를 한 단계 키워 부각한다.
-                let side: CGFloat = spec.heroNumber != nil ? (big ? 52 : 46) : (big ? 40 : 34)
+                // 마스코트 크기는 모든 토스트 동일 (창마다 다르면 스택 시 어색 — 사용자 피드백)
                 cut.resizable().interpolation(.high).scaledToFit()
-                    .frame(width: side, height: side)
+                    .frame(width: big ? 40 : 34, height: big ? 40 : 34)
             } else {
                 Text(spec.emoji).font(big ? .largeTitle : .title2)
             }
@@ -312,6 +311,7 @@ struct VignetteView: View {
 }
 
 /// 작업이 곧 끝남을 알리는 상단 예고 배너. 임박할수록 색이 강해짐.
+/// Notice 파이프라인 밖(상태 표시 — 휴식까지 상시)이지만, 겉모습은 토스트 카드와 같은 규격을 쓴다.
 struct WarningView: View {
     @ObservedObject var engine: BreakEngine
 
@@ -322,9 +322,9 @@ struct WarningView: View {
     }
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 11) {
             if let cut = MascotCut.image("warning") {
-                cut.resizable().interpolation(.high).scaledToFit().frame(width: 44, height: 44)
+                cut.resizable().interpolation(.high).scaledToFit().frame(width: 40, height: 40)
             } else {
                 Image(systemName: "hourglass")
                     .font(.title2)
@@ -332,23 +332,23 @@ struct WarningView: View {
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text("곧 휴식 시간이에요")
-                    .font(.headline)
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(ToastTheme.warm.title)
                 Text("\(BreakEngine.mmss(engine.remaining)) 후 시작")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.caption).foregroundStyle(ToastTheme.warm.caption)
             }
             Spacer(minLength: 4)
             Button("\(Int(engine.settings.snoozeMinutes))분 연기") { engine.snooze() }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 16).padding(.vertical, 12)
+        .frame(width: engine.settings.timeNoticeBig ? 500 : 440)   // 토스트 카드와 같은 폭 규격
+        .background(ToastTheme.warm.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous)
+            .strokeBorder(color, lineWidth: 2 + 3 * engine.warningIntensity))
+        .shadow(color: color.opacity(0.5), radius: 18)
+        .shadow(color: .black.opacity(0.22), radius: 6, y: 2)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .strokeBorder(color, lineWidth: 2 + 3 * engine.warningIntensity)
-        )
-        .shadow(radius: 10)
-        .padding(6)
     }
 }

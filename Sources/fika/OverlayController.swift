@@ -77,18 +77,22 @@ final class OverlayController {
     func showWarning() {
         if warningWindow != nil { return }
         guard let screen = activeScreen else { return }
-        let w: CGFloat = 320, h: CGFloat = 72
+        // 토스트와 같은 규격: 카드 440/500 + 여백 80/68 (여백이 같아야 스택 겹침 계산도 동일)
+        let w: CGFloat = (engine.settings.timeNoticeBig ? 500 : 440) + 80
+        let h: CGFloat = 64 + 68
         let f = screen.visibleFrame
-        let rect = NSRect(x: f.midX - w / 2, y: f.maxY - h - 16, width: w, height: h)
+        let rect = NSRect(x: f.midX - w / 2, y: f.maxY - h - 8, width: w, height: h)
         let win = makeWindow(frame: rect, level: .statusBar, passThrough: false)
         setHosted(win, WarningView(engine: engine))
         win.orderFront(nil)
         warningWindow = win
+        restack()   // 이미 떠 있던 토스트를 배너 아래로 내림
     }
 
     func hideWarning() {
         warningWindow?.orderOut(nil)
         warningWindow = nil
+        restack()   // 배너가 사라졌으니 토스트를 기준 위치로 올림
     }
 
     // MARK: - 토스트 알림 (잠깐 떴다 사라지는 알림 — 단일 진입점)
@@ -105,8 +109,8 @@ final class OverlayController {
     /// 대기 1건: 두 자리가 다 찼을 때. 슬롯이 비면 표시하고, 유효기한이 지나면 조용히 폐기.
     private var pending: (notice: Notice, expires: Date)?
     /// 스택 시 창끼리 겹치는 높이 — 창의 상하 여백(각 ~34pt) 합 68에서 이만큼 빼면 카드 사이 시각 간격.
-    /// 44 → 간격 ~24pt (글로우 18pt가 서로 섞이지 않을 만큼).
-    private static let stackOverlap: CGFloat = 44
+    /// 60 → 간격 ~8pt (사용자 피드백으로 조정: 24 멀다 → 16 → 그 절반).
+    private static let stackOverlap: CGFloat = 60
 
     /// 모든 토스트 알림의 단일 진입점. 발화처(BreakEngine)는 Notice만 만들고,
     /// 표시(ToastView 템플릿·창 실측·로그 기록·소리)와 겹침 정책을 여기서 처리한다.
@@ -182,9 +186,9 @@ final class OverlayController {
         let w = (fit.width > 0 ? fit.width : (s.timeNoticeBig ? 500 : 440)) + 80   // 글로우+등장 모션 여백
         let h = min(max(fit.height, 60), 400) + 68
 
-        // 이미 떠 있는 카드가 있으면 그 곁에 스택, 없으면 기준 위치.
+        // 이미 떠 있는 카드가 있으면 그 곁에 스택, 없으면 기준 위치(예고 배너가 있으면 그 아래).
         let rect = toasts.last.map { stackedFrame(anchor: $0.window.frame, w: w, h: h, in: f, position: s.timeNoticePosition) }
-            ?? primaryFrame(w: w, h: h, in: f, position: s.timeNoticePosition)
+            ?? firstSlotFrame(w: w, h: h, in: f, position: s.timeNoticePosition)
         let win = makeWindow(frame: rect, level: .statusBar, passThrough: false)
         box.window = win
         // 루트뷰는 반드시 유연하게(maxWidth/Height ∞) 얹는다 — 고정 크기 루트를 그대로 얹으면
@@ -211,6 +215,15 @@ final class OverlayController {
         case .center:      return NSRect(x: f.midX - w / 2, y: f.midY - h / 2,  width: w, height: h)
         case .bottomRight: return NSRect(x: f.maxX - w,     y: f.minY + 8,      width: w, height: h)
         }
+    }
+
+    /// 1장째가 실제로 앉을 자리 — 상단 중앙 배치에서 예고 배너가 떠 있으면 그 아래로 내려간다.
+    /// (배너 창도 토스트와 같은 여백 규격이라 겹침값을 그대로 쓴다)
+    private func firstSlotFrame(w: CGFloat, h: CGFloat, in f: NSRect, position: ToastPosition) -> NSRect {
+        if position == .topCenter, let banner = warningWindow?.frame {
+            return stackedFrame(anchor: banner, w: w, h: h, in: f, position: position)
+        }
+        return primaryFrame(w: w, h: h, in: f, position: position)
     }
 
     /// 이미 떠 있는 창(anchor) 곁에 쌓이는 위치 — 상단/중앙 배치는 아래로, 우하단 배치는 위로.
@@ -298,33 +311,46 @@ final class OverlayController {
         }, completionHandler: { win.orderOut(nil) })
     }
 
-    /// 남은 토스트를 기준 위치로 이동. 같은 크기의 "이동"만 한다 —
+    /// 떠 있는 토스트들을 제자리(배너 아래 → 스택 순서)로 이동. 같은 크기의 "이동"만 한다 —
     /// 표시 후 리사이즈는 macOS 26 크래시 함정이라 절대 안 한다.
     private func restack() {
-        guard let first = toasts.first, let f = first.window.screen?.visibleFrame else { return }
-        let size = first.window.frame.size
-        let target = primaryFrame(w: size.width, h: size.height, in: f, position: engine.settings.timeNoticePosition)
-        guard target != first.window.frame else { return }
-        NSAnimationContext.runAnimationGroup { ctx in
-            ctx.duration = 0.25
-            first.window.animator().setFrame(target, display: true)
+        guard let f = toasts.first?.window.screen?.visibleFrame else { return }
+        let position = engine.settings.timeNoticePosition
+        var anchor: NSRect?
+        for t in toasts {
+            let size = t.window.frame.size
+            let target = anchor.map { stackedFrame(anchor: $0, w: size.width, h: size.height, in: f, position: position) }
+                ?? firstSlotFrame(w: size.width, h: size.height, in: f, position: position)
+            if target != t.window.frame {
+                NSAnimationContext.runAnimationGroup { ctx in
+                    ctx.duration = 0.25
+                    t.window.animator().setFrame(target, display: true)
+                }
+            }
+            anchor = target
         }
     }
 
-    /// 개발용(FIKA_TEST_TOAST): 떠 있는 토스트 창(들)을 하나의 PNG로 저장 — 화면 캡처 권한 없이 시각 확인.
+    /// 개발용(FIKA_TEST_TOAST): 떠 있는 토스트·예고 배너 창들을 하나의 PNG로 저장 — 화면 캡처 권한 없이 시각 확인.
     func snapshotToast(to path: String) {
-        guard !toasts.isEmpty else { return }
-        let frames = toasts.map(\.window.frame)
+        var windows = toasts.map(\.window)
+        if let banner = warningWindow { windows.insert(banner, at: 0) }
+        guard !windows.isEmpty else { return }
+        let frames = windows.map(\.frame)
         let union = frames.dropFirst().reduce(frames[0]) { $0.union($1) }
         let img = NSImage(size: union.size)
         img.lockFocus()
-        for t in toasts {
-            guard let v = t.window.contentView,
+        for win in windows {
+            guard let v = win.contentView,
                   let rep = v.bitmapImageRepForCachingDisplay(in: v.bounds) else { continue }
             v.cacheDisplay(in: v.bounds, to: rep)
-            rep.draw(in: NSRect(x: t.window.frame.minX - union.minX,
-                                y: t.window.frame.minY - union.minY,
-                                width: t.window.frame.width, height: t.window.frame.height))
+            // rep.draw는 copy 합성이라 위 창의 투명 여백이 아래 창을 지운다 → sourceOver로.
+            let piece = NSImage(size: v.bounds.size)
+            piece.addRepresentation(rep)
+            piece.draw(in: NSRect(x: win.frame.minX - union.minX,
+                                  y: win.frame.minY - union.minY,
+                                  width: win.frame.width, height: win.frame.height),
+                       from: .zero, operation: .sourceOver, fraction: 1)
         }
         img.unlockFocus()
         guard let tiff = img.tiffRepresentation, let outRep = NSBitmapImageRep(data: tiff),
