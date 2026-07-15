@@ -50,7 +50,9 @@ struct BreakView: View {
                     Button("작업 시작") { engine.skipBreak() }
                         .keyboardShortcut(.defaultAction)
                 } else {
-                    Button("\(Int(engine.settings.snoozeMinutes))분 연기") { engine.snooze() }
+                    if engine.canSnooze {   // 세션당 연기 예산 소진 시 버튼 숨김 → 반드시 쉼
+                        Button("\(Int(engine.settings.snoozeMinutes))분 연기") { engine.snooze() }
+                    }
                     Button("건너뛰기") { engine.skipBreak() }
                         .keyboardShortcut(.cancelAction)
                 }
@@ -321,6 +323,7 @@ struct WarningView: View {
         return Color(hue: 0.13 - 0.13 * i, saturation: 0.9, brightness: 1.0)
     }
 
+
     var body: some View {
         HStack(spacing: 11) {
             if let cut = MascotCut.image("warning") {
@@ -338,9 +341,26 @@ struct WarningView: View {
                     .font(.caption).foregroundStyle(ToastTheme.warm.caption)
             }
             Spacer(minLength: 4)
-            Button("\(Int(engine.settings.snoozeMinutes))분 연기") { engine.snooze() }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
+            if engine.canSnooze {
+                VStack(alignment: .center, spacing: 3) {
+                    Button("\(Int(engine.settings.snoozeMinutes))분 연기") { engine.snooze() }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                    // 연기 쿠폰: 남은 만큼 채워진 잔 — 연기할 때마다 한 잔씩 비운다
+                    if let left = engine.snoozeRemaining {
+                        HStack(spacing: 2) {
+                            ForEach(0..<Int(engine.settings.snoozeMaxCount), id: \.self) { i in
+                                Image(systemName: i < left ? "cup.and.saucer.fill" : "cup.and.saucer")
+                                    .font(.system(size: 9))
+                                    .foregroundStyle(ToastTheme.warm.caption.opacity(i < left ? 1 : 0.35))
+                            }
+                        }
+                    }
+                }
+            } else {
+                Text("연기 다 썼어요 ☕")   // 세션당 연기 예산 소진 → 이번엔 쉬어야 함
+                    .font(.caption).foregroundStyle(ToastTheme.warm.caption)
+            }
         }
         .padding(.horizontal, 16).padding(.vertical, 12)
         .frame(width: engine.settings.timeNoticeBig ? 500 : 440)   // 토스트 카드와 같은 폭 규격

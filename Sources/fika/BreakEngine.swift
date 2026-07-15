@@ -34,6 +34,8 @@ final class BreakEngine: ObservableObject {
     @Published private(set) var completedWork = 0
     /// 유휴 감지로 자리를 비웠다고 판단한 상태
     @Published private(set) var isAway = false
+    /// 이번 작업 세션에서 이미 쓴 연기 횟수 (새 작업 세션마다 리셋)
+    @Published private(set) var snoozeUsed = 0
 
     /// 현재 단계의 전체 길이 (진행 링 계산용)
     @Published private(set) var phaseDuration: TimeInterval = 1
@@ -539,6 +541,7 @@ final class BreakEngine: ObservableObject {
         phase = .working
         isLongBreak = false
         workedSeconds = 0
+        snoozeUsed = 0   // 새 작업 세션 → 연기 예산 리셋 (휴식 중 연기는 startWork를 안 거치므로 유지됨)
         setRemaining(settings.workMinutes * 60)
         nextMicroBreak = Date().addingTimeInterval(settings.microBreakMinutes * 60)
         resetTimeNoticeBucket(forRemaining: settings.workMinutes * 60)
@@ -647,10 +650,20 @@ final class BreakEngine: ObservableObject {
         startWorkFromBreak()
     }
 
-    /// 5분(설정값) 연기.
+    /// 이번 세션에 남은 연기 횟수. 제한을 끄면 nil(무제한).
+    var snoozeRemaining: Int? {
+        settings.snoozeLimitEnabled ? max(0, Int(settings.snoozeMaxCount) - snoozeUsed) : nil
+    }
+
+    /// 연기를 더 쓸 수 있는가 — 소진되면 연기 버튼이 숨고, 이 가드로 이중 방어한다.
+    var canSnooze: Bool { snoozeRemaining.map { $0 > 0 } ?? true }
+
+    /// 5분(설정값) 연기. 세션당 횟수 제한(snoozeMaxCount)이 있다 — 다 쓰면 반드시 쉬어야 한다.
     /// - 예고 중: 작업 시간을 그만큼 늘림.
     /// - 휴식 중: 휴식을 끝내고 그만큼 더 작업한 뒤 다시 휴식.
     func snooze() {
+        guard canSnooze else { return }
+        snoozeUsed += 1
         let extra = settings.snoozeMinutes * 60
         switch phase {
         case .working:
@@ -692,6 +705,12 @@ final class BreakEngine: ObservableObject {
         case "shutdownStop": overlay.post(.shutdown(title: "오늘 일은 여기까지예요 ☕",
                                                     subtitle: "오늘 7회 · 3시간 42분 집중했어요. 수고했어요", stop: true))
         case "rest":         overlay.post(.scheduledRest(title: "점심", subtitle: "13:00까지 쉬어요", entering: true))
+        case "warnSnooze2":  // 연기 2회 쓴 상태의 예고 배너 (잔 1개 남음)
+            snoozeUsed = 2
+            setTimeUntilBreak(0.9)
+        case "warnSnooze3":  // 연기 다 쓴 상태의 예고 배너 ("연기 다 썼어요")
+            snoozeUsed = 3
+            setTimeUntilBreak(0.9)
         case "warningStack": // 예고 배너 + "곧 휴식" 최종 알림: 토스트가 배너 아래에 앉아야 정상
             setTimeUntilBreak(0.9)   // 남은 54초 → 예고 구간 진입(배너는 다음 tick에 뜸)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in

@@ -282,6 +282,12 @@ private struct TimeTab: View {
             sectionHeader("예고 / 연기")
             stepperRow("휴식 예고 시간(초)", $settings.warningSeconds, 0...300, 15)
             stepperRow("연기 길이(분)", $settings.snoozeMinutes, 1...30, 1)
+            Toggle("연기 횟수 제한", isOn: $settings.snoozeLimitEnabled)
+            if settings.snoozeLimitEnabled {
+                stepperRow("세션당 최대 연기(회)", $settings.snoozeMaxCount, 1...10, 1)
+                Text("다 쓰면 연기 버튼이 사라지고, 이번엔 꼭 쉬게 돼요. 새 작업을 시작하면 다시 채워져요.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
 
             Divider().padding(.vertical, 2)
             sectionHeader("고정 휴식 시간대")

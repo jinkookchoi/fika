@@ -106,6 +106,9 @@ final class AppSettings: ObservableObject {
     @Published var cyclesBeforeLongBreak: Int     { didSet { d.set(cyclesBeforeLongBreak, forKey: "cyclesBeforeLongBreak") } }
     @Published var warningSeconds: Double         { didSet { d.set(warningSeconds, forKey: "warningSeconds") } }
     @Published var snoozeMinutes: Double          { didSet { d.set(snoozeMinutes, forKey: "snoozeMinutes") } }
+    /// 작업 세션당 연기 횟수 제한 — 소진되면 연기 버튼이 사라지고 반드시 쉬게 된다
+    @Published var snoozeLimitEnabled: Bool       { didSet { d.set(snoozeLimitEnabled, forKey: "snoozeLimitEnabled") } }
+    @Published var snoozeMaxCount: Double         { didSet { d.set(snoozeMaxCount, forKey: "snoozeMaxCount") } }
     @Published var breakStyle: BreakStyle         { didSet { d.set(breakStyle.rawValue, forKey: "breakStyle") } }
     @Published var iconTheme: IconTheme           { didSet { d.set(iconTheme.rawValue, forKey: "iconTheme") } }
     @Published var showMenuBarTime: Bool          { didSet { d.set(showMenuBarTime, forKey: "showMenuBarTime") } }
@@ -159,6 +162,8 @@ final class AppSettings: ObservableObject {
         cyclesBeforeLongBreak = int("cyclesBeforeLongBreak", 4)
         warningSeconds        = dbl("warningSeconds", 60)
         snoozeMinutes         = dbl("snoozeMinutes", 5)
+        snoozeLimitEnabled    = bool("snoozeLimitEnabled", true)
+        snoozeMaxCount        = dbl("snoozeMaxCount", 3)
         breakStyle            = BreakStyle(rawValue: d.string(forKey: "breakStyle") ?? "") ?? .fullscreen
         iconTheme             = IconTheme(rawValue: d.string(forKey: "iconTheme") ?? "") ?? .coffee
         showMenuBarTime       = bool("showMenuBarTime", true)
@@ -200,6 +205,8 @@ final class AppSettings: ObservableObject {
         cyclesBeforeLongBreak = 4
         warningSeconds = 60
         snoozeMinutes = 5
+        snoozeLimitEnabled = true
+        snoozeMaxCount = 3
         breakStyle = .fullscreen
         iconTheme = .coffee
         showMenuBarTime = true
