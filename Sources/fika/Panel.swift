@@ -370,23 +370,25 @@ private struct AlertsTab: View {
             .background(RoundedRectangle(cornerRadius: 8).fill(.primary.opacity(0.05)))
 
             Divider()
+            sectionHeader("알림 카드 겉모습")
+            Text("모든 알림 카드(시작·동작·마무리·고정휴식·남은시간)에 함께 적용돼요. 아래 알림 테스트로 바로 확인.")
+                .font(.caption).foregroundStyle(.secondary)
+            enumPickerRow("위치", $settings.timeNoticePosition) { $0.label }
+            enumPickerRow("등장 모션", $settings.timeNoticeMotion) { $0.label }
+            Toggle("카드 크게", isOn: $settings.timeNoticeBig).font(.callout)
+            Toggle("유지 중 살짝 펄스", isOn: $settings.timeNoticePulse).font(.callout)
+
+            Divider()
             sectionHeader("남은 시간 알림")
             Text("메뉴바 시간 표시와 별개로, 작업 중 \"휴식까지 N분\"을 주기적으로 잠깐 띄워요.")
                 .font(.caption).foregroundStyle(.secondary)
             Toggle("남은 시간 알림 켜기", isOn: $settings.timeNoticeEnabled)
             if settings.timeNoticeEnabled {
                 stepperRow("알림 주기(분)", $settings.timeNoticeMinutes, 5...120, 5)
-
-                Text("겉모습 · 동작 (아래 알림 테스트 → \"남은시간\" 버튼으로 바로 확인)")
-                    .font(.caption).foregroundStyle(.secondary).padding(.top, 2)
-                enumPickerRow("위치", $settings.timeNoticePosition) { $0.label }
-                enumPickerRow("등장 모션", $settings.timeNoticeMotion) { $0.label }
-                enumPickerRow("소리", $settings.timeNoticeSound) { $0.label }
                 stepperRow("표시 시간(초)", $settings.timeNoticeDuration, 3...10, 1)
-                Toggle("숫자 크게 (히어로)", isOn: $settings.timeNoticeHero).font(.callout)
+                enumPickerRow("소리", $settings.timeNoticeSound) { $0.label }
+                Toggle("숫자 강조 표시", isOn: $settings.timeNoticeHero).font(.callout)
                 Toggle("임박 강조 색", isOn: $settings.timeNoticeWarm).font(.callout)
-                Toggle("카드 크게", isOn: $settings.timeNoticeBig).font(.callout)
-                Toggle("유지 중 살짝 펄스", isOn: $settings.timeNoticePulse).font(.callout)
             }
 
             Divider()
@@ -416,9 +418,11 @@ private struct AlertsTab: View {
             Text("지금(마우스가 있는 화면)에 각 알림을 띄워봐요. 멀티 모니터에서 어느 화면에 뜨는지 확인할 수 있어요.")
                 .font(.caption).foregroundStyle(.secondary)
             HStack(spacing: 6) {
+                Button { engine.postTestToast("start") } label: { Text("시작") }
                 Button { engine.testStretchAlert() } label: { Text("동작") }
                 Button { engine.testTimeNoticeAlert() } label: { Text("남은시간") }
                 Button { engine.testShutdownAlert() } label: { Text("마무리") }
+                Button { engine.postTestToast("rest") } label: { Text("고정휴식") }
             }
             .buttonStyle(PanelButtonStyle())
 
