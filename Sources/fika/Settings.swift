@@ -220,6 +220,12 @@ final class AppSettings: ObservableObject {
         scheduledRestLabel = "점심 휴식"
         shutdownEnabled = false
         shutdownTime = 18 * 60
+        microBreakEnabled = true
+        microBreakMinutes = 10
+        timeNoticeEnabled = false
+        timeNoticeMinutes = 5
+        snoozeLimitEnabled = true
+        snoozeMaxCount = 3
     }
 
     // MARK: - 고정 휴식 시간대 계산 (자정 기준 분/초)

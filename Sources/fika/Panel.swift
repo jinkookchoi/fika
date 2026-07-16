@@ -390,7 +390,7 @@ private struct AlertsTab: View {
                 .font(.caption).foregroundStyle(.secondary)
             Toggle("남은 시간 알림 켜기", isOn: $settings.timeNoticeEnabled)
             if settings.timeNoticeEnabled {
-                stepperRow("알림 주기(분)", $settings.timeNoticeMinutes, 5...120, 5)
+                stepperRow("알림 주기(분)", $settings.timeNoticeMinutes, 1...120, 1)
                 stepperRow("표시 시간(초)", $settings.timeNoticeDuration, 3...10, 1)
                 enumPickerRow("소리", $settings.timeNoticeSound) { $0.label }
                 Toggle("숫자 강조 표시", isOn: $settings.timeNoticeHero).font(.callout)
@@ -513,7 +513,7 @@ private struct StretchTab: View {
 
             Toggle("작업 중 동작 알림 켜기", isOn: $settings.microBreakEnabled)
             if settings.microBreakEnabled {
-                stepperRow("알림 주기(분)", $settings.microBreakMinutes, 5...120, 5)
+                stepperRow("알림 주기(분)", $settings.microBreakMinutes, 1...120, 1)
             }
 
             Divider()

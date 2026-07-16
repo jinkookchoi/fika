@@ -247,9 +247,12 @@ final class OverlayController {
                     "이제 시작해볼까요?")
 
         case .stretch(let tip):
-            return (ToastSpec(cut: "work", emoji: "☕",
-                              caption: "잠깐, 이거 해볼까요?", title: tip),
-                    tip)
+            var spec = ToastSpec(cut: "work", emoji: "☕",
+                                 caption: "잠깐, 이거 해볼까요?", title: tip)
+            if engine.phase == .working {   // 동작 알림에 남은 시간을 곁들임 (남은시간 알림을 안 켜도 보이게)
+                spec.subtitle = "휴식까지 \(engine.remainingMinutesRounded)분"
+            }
+            return (spec, tip)
 
         case .timeNotice(let final):
             let mins = engine.remainingMinutesRounded
