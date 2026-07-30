@@ -42,8 +42,9 @@ final class BreakEngine: ObservableObject {
     private var phaseEnd: Date = .distantFuture
     private var pausedRemaining: TimeInterval = 0
     private var phaseBeforePause: Phase = .working
-    /// "오늘은 그만"으로 조용해진 날짜키. 일반(수동) 일시정지와 구분하며, 날이 바뀐 뒤 복귀하면 자동 재개한다(A-4).
-    private var quietDay: Int?
+    /// 일시정지가 시작된 날짜키. 날이 바뀐 뒤 복귀하면 자동 재개한다(A-4).
+    /// 수동 일시정지·"오늘은 그만" 공통 — 어떤 일시정지도 하루를 넘겨 유지되지 않는다(해제를 잊는 사고 방지).
+    private var pausedDay: Int?
     private var timer: Timer?
     /// 직전 tick 시각. 이번 tick과의 간격이 크면(주로 시스템 sleep) 시간 보정을 한다(handleLongGap).
     /// 타이머를 죽이지 않고 이 gap만으로 sleep을 감지하므로 wake 알림 유실에 강하다.
@@ -216,7 +217,7 @@ final class BreakEngine: ObservableObject {
         // 하루 마무리 알림은 시각 기반이라 상태머신과 독립 — 일시정지·고정 휴식 중에도 판정한다(A-5).
         // (아래 paused 가드나 handleScheduledRest return에 걸리면 그날 마무리 알림을 통째로 놓쳤음)
         handleShutdown()
-        handleQuietForTodayResume()   // "오늘은 그만" 후 다음날 복귀 시 자동 재개(A-4)
+        handlePausedNextDayResume()   // 일시정지("오늘은 그만" 포함) 후 다음날 복귀 시 자동 재개(A-4)
         overlay.flushPending()        // 대기 중인 토스트 표시/만료 처리 (일시정지·고정 휴식 중에도)
         guard phase != .paused else { return }
         if handleScheduledRest() { return }   // 고정 휴식 시간대면 평소 로직을 건너뛴다
@@ -311,21 +312,20 @@ final class BreakEngine: ObservableObject {
         return y * 10000 + mo * 100 + d
     }
 
-    /// "오늘은 그만" — 오늘까지만 Fika 를 조용히(일시정지). 날이 바뀐 뒤 복귀하면 스스로 재개한다(A-4).
+    /// "오늘은 그만" — 오늘까지만 Fika 를 조용히. 일시정지와 동일하며, 다음날 복귀 시 자동 재개된다(A-4).
     func quietForToday() {
-        if phase != .paused { togglePause() }   // togglePause가 quietDay를 지우므로 반드시 그 뒤에 설정
-        quietDay = Self.dayKey(Date())
+        if phase != .paused { togglePause() }
     }
 
-    /// "오늘은 그만"으로 일시정지된 상태에서 날이 바뀌고 사용자가 실제로 돌아오면(최근 입력) 자동 재개한다.
+    /// 일시정지 상태로 날이 바뀌고 사용자가 실제로 돌아오면(최근 입력) 자동 재개한다.
     /// 자정에 곧장 깨우면 밤새 휴식 오버레이가 뜨므로, 복귀(유휴 60초 미만)를 감지했을 때만 재개한다.
-    private func handleQuietForTodayResume() {
-        guard let day = quietDay, Self.dayKey(Date()) != day else { return }
+    private func handlePausedNextDayResume() {
+        guard phase == .paused, let day = pausedDay, Self.dayKey(Date()) != day else { return }
         guard SystemIdle.seconds() < 60 else { return }
-        quietDay = nil
+        pausedDay = nil
         startWork()                                   // 새 날 → 작업 사이클을 새로 시작(일시정지 해제)
         overlay.post(.start)
-        Log.event("오늘은 그만 → 다음날 복귀 감지, 자동 재개")
+        Log.event("일시정지 → 다음날 복귀 감지, 자동 재개")
     }
 
     /// 고정 휴식 시간대(예: 점심) 처리. 진입/유지/이탈을 처리했으면 true 를 돌려 평소 로직을 건너뛴다.
@@ -601,8 +601,8 @@ final class BreakEngine: ObservableObject {
     // MARK: - 사용자 동작
 
     func togglePause() {
-        quietDay = nil                          // 수동 토글은 "오늘은 그만" 상태를 해제(자동 재개 대상 아님)
         if phase == .paused {
+            pausedDay = nil
             phase = phaseBeforePause
             phaseEnd = Date().addingTimeInterval(pausedRemaining)
             remaining = pausedRemaining
@@ -611,6 +611,7 @@ final class BreakEngine: ObservableObject {
             phaseBeforePause = phase
             pausedRemaining = remaining
             phase = .paused
+            pausedDay = Self.dayKey(Date())   // 다음날 자동 재개 판정 기준
         }
         refreshPresentation()
     }
