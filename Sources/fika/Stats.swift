@@ -29,27 +29,55 @@ final class SessionStore: ObservableObject {
     func record(minutes: Double, at date: Date) {
         guard minutes > 0 else { return }
         records.append(SessionRecord(date: date, minutes: minutes))
+        invalidate()
         save()
     }
 
     // MARK: - 집계
+    //
+    // today/thisWeek/thisMonth 는 패널 홈 탭 body 에서 매번 읽힌다(진행 링 때문에 초당 수십 번).
+    // 매번 계산하면 기록 수 × 호출 수만큼 스캔이 늘어 **앱을 오래 쓸수록 무거워진다.**
+    // 그래서 세 값을 한 번에 계산해 캐시하고, 기록이 바뀌거나 날이 바뀔 때만 다시 센다.
+    // `Calendar.startOfDay`/`dateInterval(of:for:)` 도 비싸서 재계산할 때만 부른다
+    // (평소엔 만료 시각과 Date 비교 한 번으로 끝난다).
 
-    private func sum(since start: Date) -> (sessions: Int, minutes: Double) {
-        let recent = records.filter { $0.date >= start }
-        return (recent.count, recent.reduce(0) { $0 + $1.minutes })
+    typealias Tally = (sessions: Int, minutes: Double)
+
+    private var cached: (today: Tally, week: Tally, month: Tally)?
+    /// 캐시가 유효한 시각의 끝 = 다음 자정. 주/월 경계는 항상 날 경계와 함께 넘어가므로 이것만 보면 된다.
+    private var cacheExpiry = Date.distantPast
+
+    /// 기록이 바뀌면 캐시를 버린다.
+    private func invalidate() {
+        cached = nil
+        cacheExpiry = .distantPast
     }
 
-    var today: (sessions: Int, minutes: Double) { sum(since: cal.startOfDay(for: Date())) }
+    private func tallies() -> (today: Tally, week: Tally, month: Tally) {
+        let now = Date()
+        if let c = cached, now < cacheExpiry { return c }
 
-    var thisWeek: (sessions: Int, minutes: Double) {
-        let start = cal.dateInterval(of: .weekOfYear, for: Date())?.start ?? Date()
-        return sum(since: start)
+        let dayStart = cal.startOfDay(for: now)
+        let weekStart = cal.dateInterval(of: .weekOfYear, for: now)?.start ?? dayStart
+        let monthStart = cal.dateInterval(of: .month, for: now)?.start ?? dayStart
+
+        // 한 번만 순회하면서 세 구간을 동시에 센다. (주 시작이 달 시작보다 이를 수 있어 조건은 각각 독립)
+        var d: Tally = (0, 0), w: Tally = (0, 0), m: Tally = (0, 0)
+        for r in records {
+            if r.date >= monthStart { m.sessions += 1; m.minutes += r.minutes }
+            if r.date >= weekStart  { w.sessions += 1; w.minutes += r.minutes }
+            if r.date >= dayStart   { d.sessions += 1; d.minutes += r.minutes }
+        }
+
+        let result = (today: d, week: w, month: m)
+        cached = result
+        cacheExpiry = cal.date(byAdding: .day, value: 1, to: dayStart) ?? now.addingTimeInterval(60)
+        return result
     }
 
-    var thisMonth: (sessions: Int, minutes: Double) {
-        let start = cal.dateInterval(of: .month, for: Date())?.start ?? Date()
-        return sum(since: start)
-    }
+    var today: Tally { tallies().today }
+    var thisWeek: Tally { tallies().week }
+    var thisMonth: Tally { tallies().month }
 
     /// 최근 `days`일의 일별 집중 시간. (기록 없는 날도 0으로 포함, 과거→오늘 순)
     func dailySeries(days: Int) -> [(date: Date, minutes: Double)] {
@@ -101,5 +129,6 @@ final class SessionStore: ObservableObject {
         guard let data = try? Data(contentsOf: fileURL),
               let decoded = try? JSONDecoder().decode([SessionRecord].self, from: data) else { return }
         records = decoded
+        invalidate()
     }
 }

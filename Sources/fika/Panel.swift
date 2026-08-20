@@ -118,13 +118,15 @@ private struct TabButton: View {
 
 struct PanelView: View {
     @ObservedObject var engine: BreakEngine
-    @State private var tab: PanelTab = .home
+    /// 팝오버는 닫힐 때 뷰 계층째 버려지므로(상시 렌더 방지) 탭 선택은 뷰 밖에 남긴다.
+    @MainActor private static var lastTab: PanelTab = .home
+    @State private var tab: PanelTab = PanelView.lastTab
 
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 4) {
                 ForEach(PanelTab.allCases, id: \.self) { t in
-                    TabButton(tab: t, selected: tab == t) { tab = t }
+                    TabButton(tab: t, selected: tab == t) { tab = t; PanelView.lastTab = t }
                 }
             }
             .padding(8)
@@ -190,13 +192,16 @@ private struct HomeTab: View {
     @ObservedObject private var stats = SessionStore.shared
 
     var body: some View {
-        VStack(spacing: 14) {
+        // 같은 집계를 두 번 읽지 않도록 body 당 한 번만 꺼낸다.
+        let today = stats.today
+        let week = stats.thisWeek
+        return VStack(spacing: 14) {
             RingView(engine: engine)
 
             VStack(spacing: 2) {
-                Text("오늘 \(stats.today.sessions)회 · \(SessionStore.hm(stats.today.minutes)) 집중")
+                Text("오늘 \(today.sessions)회 · \(SessionStore.hm(today.minutes)) 집중")
                     .font(.caption).foregroundStyle(.secondary)
-                Text("이번 주 \(stats.thisWeek.sessions)회 · \(SessionStore.hm(stats.thisWeek.minutes))")
+                Text("이번 주 \(week.sessions)회 · \(SessionStore.hm(week.minutes))")
                     .font(.caption2).foregroundStyle(.secondary)
                 if let up = engine.scheduledRestUpcoming {
                     Text(up).font(.caption2).foregroundStyle(.secondary)
